@@ -1,18 +1,22 @@
 <div align="center">
-  <img src="docs/logo.png" alt="SeminarSmack Logo" width="120" style="border-radius: 20%; margin-bottom: 20px;" />
+  <img src="https://raw.githubusercontent.com/bitboyb/SeminarSmack/main/docs/assets/img/logo.png" alt="SeminarSmack Logo" width="120" style="border-radius: 20%; margin-bottom: 20px;" />
   <h1>SeminarSmack</h1>
   <p><strong>A free, open-source classroom interaction tool.</strong></p>
   
   <a href="https://bitboyb.github.io/SeminarSmack/">
     <img src="https://img.shields.io/badge/Live_Demo-Try_it_now!-ee9ad5?style=for-the-badge" alt="Live Demo" />
   </a>
-  <img src="https://img.shields.io/badge/Architecture-Zero_Backend-5fd9d7?style=for-the-badge" alt="Zero Backend" />
-  <img src="https://img.shields.io/badge/License-MIT-gray?style=for-the-badge" alt="License MIT" />
+  <a href="https://bitboyb.github.io/SeminarSmack/api/">
+    <img src="https://img.shields.io/badge/API_Docs-View_Reference-5fd9d7?style=for-the-badge" alt="API Docs" />
+  </a>
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-gray?style=for-the-badge" alt="License MIT" />
+  </a>
 
   <p>Create live polls, quizzes, and short text questions — students join with a QR code from any device.<br/>No login required. No install. Free to use.</p>
 
   <br />
-  <video src="seminar-smack-preview.webm" autoplay loop muted playsinline width="80%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);"></video>
+  <video src="https://github.com/bitboyb/SeminarSmack/raw/main/seminar-smack-preview.webm" autoplay loop muted playsinline width="80%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);"></video>
 </div>
 
 ---
