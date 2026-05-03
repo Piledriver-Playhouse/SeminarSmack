@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SeminarSmack Embed</title>
+    <title>Create a Session — SeminarSmack</title>
+    <meta name="description" content="Build a live classroom session with polls, quizzes, and short text questions. No login required." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,15 +16,23 @@
       window.APP_CONFIG = window.APP_CONFIG || {};
     </script>
     <script src="./config.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="./app.js"></script>
   </head>
-  <body data-page="embed" class="embed-page">
-    <main class="embed-shell">
+  <body data-page="create">
+    <main class="shell">
+      <header class="subhero panel">
+        <div>
+          <p class="section-kicker">Session builder</p>
+          <h1>Create your session</h1>
+        </div>
+        <a class="button button-ghost" href="./index.html">Home</a>
+      </header>
+
       <div id="page-status" class="status-banner" aria-live="polite"></div>
-      <section id="session-summary" class="panel panel-spacious embed-panel"></section>
-      <section id="activity-stage" class="panel panel-spacious embed-panel"></section>
-      <section id="results-stage" class="panel panel-spacious embed-panel"></section>
+
+      <section id="builder-root" class="panel panel-spacious" style="margin-top: var(--space-md);">
+        <!-- Rendered by session-builder.js -->
+      </section>
     </main>
   </body>
 </html>

@@ -3,17 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SeminarSmack Join</title>
+    <title>Join Session — SeminarSmack</title>
+    <meta name="description" content="Join a live classroom session. Answer polls, quizzes, and questions from your phone." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
-    <script>
-      window.APP_CONFIG = window.APP_CONFIG || {};
-    </script>
+    <script>window.APP_CONFIG = window.APP_CONFIG || {};</script>
     <script src="./config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="./app.js"></script>
@@ -22,14 +18,12 @@
     <main class="shell">
       <header class="subhero panel">
         <div>
-          <p class="section-kicker">Participant view</p>
+          <p class="section-kicker">Student view</p>
           <h1>Join session</h1>
         </div>
-        <a class="button button-ghost" href="./index.html">Setup guide</a>
+        <a class="button button-ghost" href="./index.html">Home</a>
       </header>
-
       <div id="page-status" class="status-banner" aria-live="polite"></div>
-
       <section id="session-summary" class="panel panel-spacious"></section>
       <section id="activity-stage" class="panel panel-spacious"></section>
       <section id="results-stage" class="panel panel-spacious"></section>

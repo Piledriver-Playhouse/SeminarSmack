@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SeminarSmack Presenter</title>
+    <title>Host Session — SeminarSmack</title>
+    <meta name="description" content="Host a live classroom session. Control activities, see live responses, and share the QR code with your students." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,6 +16,8 @@
       window.APP_CONFIG = window.APP_CONFIG || {};
     </script>
     <script src="./config.js"></script>
+    <!-- QR code library for generating scannable join codes -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script type="module" src="./app.js"></script>
   </head>
@@ -22,16 +25,17 @@
     <main class="shell shell-wide">
       <header class="subhero panel">
         <div>
-          <p class="section-kicker">Presenter console</p>
-          <h1>Run the room</h1>
+          <p class="section-kicker">Presenter</p>
+          <h1>Host your session</h1>
         </div>
-        <a class="button button-ghost" href="./index.html">Setup guide</a>
+        <a class="button button-ghost" href="./index.html">Home</a>
       </header>
 
       <div id="page-status" class="status-banner" aria-live="polite"></div>
 
       <div class="dashboard-grid">
         <section id="session-summary" class="panel panel-spacious"></section>
+        <section id="qr-panel" class="panel panel-spacious"></section>
         <section id="control-panel" class="panel panel-spacious"></section>
         <section id="activity-stage" class="panel panel-spacious"></section>
         <section id="results-stage" class="panel panel-spacious"></section>
