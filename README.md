@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/bitboyb/SeminarSmack/main/docs/assets/img/logo.png" alt="SeminarSmack Logo" width="120" style="border-radius: 20%; margin-bottom: 20px;" />
+  <img src="https://github.com/bitboyb/SeminarSmack/blob/main/docs/assets/img/logo.png?raw=true" alt="SeminarSmack Logo" width="120" style="border-radius: 20%; margin-bottom: 20px;" />
   <h1>SeminarSmack</h1>
   <p><strong>A free, open-source classroom interaction tool.</strong></p>
   
