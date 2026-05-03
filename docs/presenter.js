@@ -222,13 +222,14 @@ function renderPresenter(runtime) {
   if (qrPanel) {
     qrPanel.innerHTML = joinLink ? `
       <div class="qr-panel">
-        <p class="section-kicker">Student join</p>
+        <p class="section-kicker">📱 Students join here</p>
         <div class="room-code-display">${escapeHtml(runtime.room)}</div>
-        <canvas id="qr-canvas"></canvas>
+        <div id="qr-container"></div>
+        <p class="body-copy" style="max-width: 360px; margin: 0 auto; font-size: 0.92rem;">Scan the QR code with your phone camera, or open the link below in any browser.</p>
         <div class="stack">
           <div class="copy-row">
             <input id="presenter-join-link" type="text" readonly value="${escapeAttribute(joinLink)}" />
-            <button class="button button-ghost" type="button" data-copy-target="presenter-join-link">Copy</button>
+            <button class="button button-ghost" type="button" data-copy-target="presenter-join-link">Copy link</button>
           </div>
         </div>
       </div>
@@ -313,10 +314,27 @@ function renderPresenter(runtime) {
 }
 
 function renderQR(url) {
-  if (!url || typeof window.QRCode === "undefined") return;
-  const canvas = document.getElementById("qr-canvas");
-  if (!canvas) return;
-  window.QRCode.toCanvas(canvas, url, { width: 220, margin: 2 }, () => {});
+  const container = document.getElementById("qr-container");
+  if (!container || !url) return;
+
+  try {
+    if (typeof window.qrcode !== "function") throw new Error("QR library not loaded.");
+    const qr = window.qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    const img = qr.createImgTag(6, 16);
+    container.innerHTML = img;
+    const imgEl = container.querySelector("img");
+    if (imgEl) {
+      imgEl.alt = "QR code to join this session";
+      imgEl.style.maxWidth = "280px";
+      imgEl.style.width = "100%";
+      imgEl.style.height = "auto";
+      imgEl.style.borderRadius = "var(--radius-md)";
+    }
+  } catch {
+    container.innerHTML = `<div class="notice notice-info" style="text-align:center;">QR code could not be generated. Students can use the link or room code above instead.</div>`;
+  }
 }
 
 function renderPresenterPreview(runtime, activity, actState) {

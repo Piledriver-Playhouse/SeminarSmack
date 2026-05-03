@@ -24,6 +24,7 @@ No login required. No install. Free to use.
 
 - Sessions created in the browser are stored in your browser's `localStorage`.
 - The presenter page is the **source of truth** — it broadcasts state to all connected students via Supabase Realtime Broadcast.
+- The **QR code** on the presenter page is generated locally in the browser using a vendored copy of [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator). No QR API, CDN, or backend service is used.
 - There is **no database** and **no backend server**. Everything runs in the browser.
 - Sessions are temporary and local to the browser that created them, unless you export them as JSON.
 
@@ -83,6 +84,8 @@ Edit `docs/config.js` with your Supabase credentials, then serve `docs/` locally
   landing.js          — Landing page module
   supabase.js         — Supabase client
   config.template.js  — Config placeholder
+  vendor/
+    qrcode.min.js       — QR code generator (vendored, no CDN)
   sessions/
     sample-session.json
     example-session.json

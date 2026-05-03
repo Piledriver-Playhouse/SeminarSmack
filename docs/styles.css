@@ -270,7 +270,14 @@ img { max-width: 100%; height: auto; }
 
 .field-grid { grid-template-columns: 1fr; }
 .output-grid, .card-grid, .metric-grid, .choice-grid { grid-template-columns: 1fr; }
-.dashboard-grid { grid-template-columns: 1fr; align-items: start; }
+.dashboard-grid {
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.dashboard-grid > :empty {
+  display: none;
+}
 
 .two-up { grid-template-columns: 1fr; }
 .three-up { grid-template-columns: 1fr; }
@@ -814,7 +821,17 @@ details > div {
 /* ── Responsive: Desktop ───────────────────────── */
 
 @media (min-width: 1024px) {
-  .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Full-width panels */
+  .dashboard-grid > #session-summary,
+  .dashboard-grid > #control-panel,
+  .dashboard-grid > #authoring-panel {
+    grid-column: 1 / -1;
+  }
+
   .feature-grid { grid-template-columns: repeat(3, 1fr); }
 
   .landing-hero {
