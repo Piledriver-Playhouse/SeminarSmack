@@ -6,6 +6,9 @@
   <a href="https://bitboyb.github.io/SeminarSmack/">
     <img src="https://img.shields.io/badge/Live_Demo-Try_it_now!-ee9ad5?style=for-the-badge" alt="Live Demo" />
   </a>
+  <a href="https://github.com/sponsors/bitboyb">
+    <img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github" alt="Sponsor on GitHub" />
+  </a>
   <a href="https://bitboyb.github.io/SeminarSmack/api/">
     <img src="https://img.shields.io/badge/API_Docs-View_Reference-5fd9d7?style=for-the-badge" alt="API Docs" />
   </a>
