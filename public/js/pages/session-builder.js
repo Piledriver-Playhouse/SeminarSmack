@@ -104,21 +104,21 @@ function render() {
           <button class="type-option" type="button" data-add-type="poll">
             <div class="type-icon">📊</div>
             <div class="type-option-info">
-              <strong>Poll</strong>
+              <span class="type-name">Poll</span>
               <span>Multiple choice, no correct answer</span>
             </div>
           </button>
           <button class="type-option" type="button" data-add-type="quiz">
             <div class="type-icon">🧠</div>
             <div class="type-option-info">
-              <strong>Quiz</strong>
+              <span class="type-name">Quiz</span>
               <span>Multiple choice with a correct answer</span>
             </div>
           </button>
           <button class="type-option" type="button" data-add-type="text">
             <div class="type-icon">💬</div>
             <div class="type-option-info">
-              <strong>Short text</strong>
+              <span class="type-name">Short text</span>
               <span>Open-ended short response</span>
             </div>
           </button>

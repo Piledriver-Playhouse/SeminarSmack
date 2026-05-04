@@ -58,7 +58,7 @@
 
 * { box-sizing: border-box; }
 
-html { color-scheme: light; }
+html { color-scheme: dark; }
 
 body {
   margin: 0;
@@ -88,6 +88,11 @@ code, pre, input[type="text"], textarea {
 
 button, input, textarea, select {
   font: inherit;
+  color: inherit;
+}
+
+strong {
+  color: var(--text);
 }
 
 img { max-width: 100%; height: auto; }
@@ -552,6 +557,7 @@ img { max-width: 100%; height: auto; }
 .builder-activity-header h3 {
   margin: 0;
   font-size: 1.1rem;
+  color: var(--text);
 }
 
 .builder-activity-actions {
@@ -593,6 +599,7 @@ img { max-width: 100%; height: auto; }
   transition: border-color 160ms ease, background 160ms ease;
   text-align: left;
   width: 100%;
+  color: var(--text);
 }
 
 .type-option:hover {
@@ -618,8 +625,10 @@ img { max-width: 100%; height: auto; }
   gap: 0.15rem;
 }
 
-.type-option-info strong {
+.type-name {
   font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .type-option-info span {
