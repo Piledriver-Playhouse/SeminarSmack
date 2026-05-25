@@ -16,7 +16,7 @@
     <img src="https://img.shields.io/badge/License-MIT-gray?style=for-the-badge" alt="License MIT" />
   </a>
 
-  <p>Create live polls, quizzes, and short text questions — students join with a QR code from any device.<br/>No login required. No install. Free to use.</p>
+  <p>Create live polls, quizzes, short text questions, ratings, and kanban boards — students join with a QR code or typed room code from any device.<br/>No login required. No install. Free to use.</p>
 
   <br />
   <img src="https://github.com/bitboyb/SeminarSmack/raw/main/public/assets/img/seminar-smack-preview.gif" width="80%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
@@ -37,16 +37,65 @@
 - **Live polls** — multiple-choice questions with realtime results
 - **Quizzes** — mark a correct answer and reveal it when ready
 - **Short text responses** — collect open-ended answers from students
+- **Ratings** — collect 1-5 star feedback with optional comments
+- **Kanban boards** — let participants add cards into presenter-defined columns
+- **Anonymous questions** — participants can send live questions to the presenter
 - **QR code join** — students scan and answer from their phones
-- **Session export/import** — save your session as JSON and reuse it later
+- **Session export/import** — save your session as JSON and export collected responses when the session closes
 
 ## How it works
 
 - Sessions created in the browser are stored in your browser's `localStorage`.
 - The presenter page is the **source of truth** — it broadcasts state to all connected students via Supabase Realtime Broadcast.
+- Students can join with a QR code, a direct link, or a manually typed room code on `join.html`.
 - The **QR code** on the presenter page is generated locally in the browser using a vendored copy of [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator). No QR API, CDN, or backend service is used.
 - There is **no database** and **no backend server**. Everything runs in the browser.
 - Sessions are temporary and local to the browser that created them, unless you export them as JSON.
+
+## Example activity JSON
+
+### Rating
+
+```json
+{
+  "id": "rate-session-feedback",
+  "type": "rate",
+  "title": "How useful was this session?",
+  "prompt": "Rate the session and optionally leave a comment.",
+  "maxRating": 5,
+  "comment": true
+}
+```
+
+### Kanban
+
+```json
+{
+  "id": "project-kanban",
+  "type": "kanban",
+  "title": "Project Ideas Board",
+  "prompt": "Add an idea, reference image, video, GIF, or useful link.",
+  "columns": [
+    { "id": "ideas", "title": "Ideas" },
+    { "id": "in-progress", "title": "In Progress" },
+    { "id": "done", "title": "Done" }
+  ]
+}
+```
+
+## Live questions and exports
+
+- Participants can send anonymous questions from the join page at any point during a live session.
+- Presenters see incoming questions live in a dedicated panel and hear a short notification sound after interacting with the page.
+- When a presenter closes a session, they can export all collected responses as a client-side JSON download with ratings, comments, kanban cards, and anonymous questions.
+
+## Manual testing checklist
+
+- Join flow: type a valid room code, press `Enter`, click `Join session`, and confirm empty or inactive room codes show a clear warning.
+- Rating: submit a valid star rating, confirm invalid values are rejected client-side, and verify the presenter average/comments update live.
+- Kanban: add cards to each configured column, verify optional URLs render as previews or links, and confirm the presenter board updates live.
+- Questions: submit an anonymous question, confirm it appears in the presenter panel, and verify the notification only sounds for newly received questions.
+- Export: close the session, export responses, and confirm the JSON includes activities, responses, ratings, kanban cards, and anonymous questions.
 
 ## Ethos
 

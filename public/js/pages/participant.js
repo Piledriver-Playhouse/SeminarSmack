@@ -20,7 +20,7 @@ import {
   escapeHtml, escapeAttribute,
   renderMetricCard, renderEmptyState, setBanner, buildSubmissionStoreKey,
   getLocalSubmissionEntry, resetLocalSubmissionEntry, recordLocalSubmission,
-  verifyEventIfNeeded, createLocalSubmissionEntry
+  verifyEventIfNeeded, createLocalSubmissionEntry, clampNumber
 } from "../app.js";
 
 export async function initJoinPage() {
@@ -36,13 +36,13 @@ export async function initJoinPage() {
     session: null, sessionHash: "",
     sessionSource: sessionParam ? `${sessionParam}.json` : "not loaded",
     sharedState: null, connectionLabel: "Not connected", connectionTone: "muted",
-    textDraft: "", bannerMessage: "", bannerTone: "info",
+    textDraft: "", ratingCommentDraft: "", kanbanTextDraft: "", kanbanUrlDraft: "", questionDraft: "", bannerMessage: "", bannerTone: "info",
     submissionStoreKey: buildSubmissionStoreKey(room, sessionParam || "default"),
     lastHeartbeat: Date.now(), watchdogTimer: null
   };
 
   if (!room) {
-    runtime.bannerMessage = "No room code found. Ask your teacher for the join link or QR code.";
+    runtime.bannerMessage = "Enter a room code to join a live session.";
     runtime.bannerTone = "warning";
     renderAudience(runtime);
     return;
@@ -128,6 +128,25 @@ export async function initJoinPage() {
         runtime.sharedState.revision = rev;
         renderAudience(runtime);
       },
+      question_submitted: async (p) => {
+        const ok = await verifyEventIfNeeded(runtime, "question_submitted", p);
+        if (!ok || !runtime.sharedState) return;
+        const question = normalizeQuestion(p);
+        if (!question || runtime.sharedState.questions.some((entry) => entry.id === question.id)) return;
+        runtime.lastHeartbeat = Date.now();
+        runtime.sharedState.questions.push(question);
+        renderAudience(runtime);
+      },
+      session_closed: async (p) => {
+        const ok = await verifyEventIfNeeded(runtime, "session_closed", p);
+        if (!ok || !runtime.sharedState) return;
+        runtime.lastHeartbeat = Date.now();
+        runtime.sharedState.sessionClosed = true;
+        runtime.sharedState.submissionsLocked = true;
+        runtime.bannerMessage = "This session has been closed by the presenter.";
+        runtime.bannerTone = "warning";
+        renderAudience(runtime);
+      },
       state_snapshot: async (p) => {
         const ok = await verifyEventIfNeeded(runtime, "state_snapshot", p);
         if (!ok) return;
@@ -200,12 +219,16 @@ function applySnapshot(runtime, payload) {
   nextState.currentActivityIndex = clampIndex(Number(payload.currentActivityIndex), session.activities.length);
   nextState.submissionsLocked = Boolean(payload.submissionsLocked);
   nextState.revealedActivityIds = new Set(Array.isArray(payload.revealedActivityIds) ? payload.revealedActivityIds : []);
+  nextState.questions = Array.isArray(payload.questions) ? payload.questions.map(normalizeQuestion).filter(Boolean) : [];
+  nextState.sessionClosed = Boolean(payload.sessionClosed);
 
   Object.entries(nextState.activityStates).forEach(([aid, state]) => {
     const incoming = payload.activityStates?.[aid] || {};
     const activity = session.activities.find((a) => a.id === aid);
     state.counts = Array.isArray(activity?.options) ? activity.options.map((_, i) => Number(incoming.counts?.[i]) || 0) : [];
     state.texts = Array.isArray(incoming.texts) ? incoming.texts.map((e, i) => ({ id: String(e.id || `${aid}-${i}`), text: String(e.text || "").slice(0, getTextMaxLength(activity)), submittedAt: String(e.submittedAt || "") })).filter((e) => e.text) : [];
+    state.ratings = Array.isArray(incoming.ratings) ? incoming.ratings.map((entry, i) => normalizeRatingEntry(entry, activity, `${aid}-rating-${i}`)).filter(Boolean) : [];
+    state.cards = Array.isArray(incoming.cards) ? incoming.cards.map((entry, i) => normalizeKanbanCard(entry, activity, `${aid}-card-${i}`)).filter(Boolean) : [];
     state.resetCount = Number(incoming.resetCount) || 0;
     getLocalSubmissionEntry(runtime, aid, state.resetCount);
   });
@@ -223,6 +246,7 @@ function renderAudience(runtime) {
   const sessionSummary = document.getElementById("session-summary");
   const activityStage = document.getElementById("activity-stage");
   const resultsStage = document.getElementById("results-stage");
+  const questionsStage = document.getElementById("questions-stage");
   const pageStatus = document.getElementById("page-status");
 
   const activeText = document.activeElement?.id === "text-response-input" ? document.activeElement : null;
@@ -230,13 +254,13 @@ function renderAudience(runtime) {
   const selEnd = typeof activeText?.selectionEnd === "number" ? activeText.selectionEnd : null;
 
   setBanner(pageStatus, runtime.bannerMessage, runtime.bannerTone);
-  if (!sessionSummary || !activityStage || !resultsStage) return;
+  if (!sessionSummary || !activityStage || !resultsStage || !questionsStage) return;
 
-  const activity = getCurrentActivity(runtime.session, runtime.sharedState);
+  const activity = runtime.sharedState?.sessionClosed ? null : getCurrentActivity(runtime.session, runtime.sharedState);
   const actState = activity ? runtime.sharedState?.activityStates[activity.id] : null;
   const total = activity ? getResponseTotal(activity, actState) : 0;
 
-  sessionSummary.innerHTML = runtime.session ? `
+  sessionSummary.innerHTML = runtime.room && runtime.session ? `
     <div class="session-meta">
       <div class="summary-row">
         <div>
@@ -254,9 +278,14 @@ function renderAudience(runtime) {
         ${renderMetricCard("Status", escapeHtml(runtime.connectionLabel), runtime.connectionTone === "success" ? "Live" : "Offline")}
       </div>
     </div>
-  ` : renderEmptyState("Waiting for session", "The presenter hasn't started the session yet. Stay on this page — it will update automatically.");
+    ${renderJoinForm(runtime)}
+  ` : runtime.room
+    ? `${renderEmptyState("Waiting for session", "The presenter hasn't started the session yet. Stay on this page — it will update automatically.")}${renderJoinForm(runtime)}`
+    : renderJoinForm(runtime);
 
-  activityStage.innerHTML = activity ? renderActivityUI(runtime, activity, actState) : renderEmptyState("No active question", "The presenter will push a question to you shortly.");
+  activityStage.innerHTML = runtime.sharedState?.sessionClosed
+    ? renderEmptyState("Session closed", "This session is no longer accepting responses.")
+    : activity ? renderActivityUI(runtime, activity, actState) : renderEmptyState("No active question", "The presenter will push a question to you shortly.");
 
   resultsStage.innerHTML = activity ? `
     <div class="results-shell">
@@ -268,6 +297,10 @@ function renderAudience(runtime) {
     </div>
   ` : renderEmptyState("No results yet", "Results appear here once a question is active.");
 
+  questionsStage.innerHTML = runtime.sharedState?.sessionClosed
+    ? renderEmptyState("Questions closed", "The presenter has ended the session.")
+    : renderQuestionsPanel(runtime);
+
   bindSubmissions(runtime, activity);
 
   if (activeText) {
@@ -275,6 +308,17 @@ function renderAudience(runtime) {
     next?.focus();
     if (next && typeof selStart === "number" && typeof selEnd === "number") next.setSelectionRange(selStart, selEnd);
   }
+}
+
+function renderJoinForm(runtime) {
+  return `
+    <form id="manual-join-form" class="stack-lg">
+      <label class="field"><span>Room code</span><input id="manual-room-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="e.g. spark-1234" value="${escapeAttribute(runtime.room || "")}" /></label>
+      <div class="control-row">
+        <button class="button button-primary" type="submit">Join session</button>
+      </div>
+    </form>
+  `;
 }
 
 function renderActivityUI(runtime, activity, actState) {
@@ -294,6 +338,52 @@ function renderActivityUI(runtime, activity, actState) {
             <textarea id="text-response-input" maxlength="${getTextMaxLength(activity)}" placeholder="Type your answer here…" ${gate.canSubmit ? '' : 'disabled'}>${escapeHtml(runtime.textDraft)}</textarea>
           </label>
           <button class="button button-primary button-lg" type="submit" ${gate.canSubmit ? '' : 'disabled'}>Submit</button>
+        </form>
+        <div class="notice ${gate.tone === 'warning' ? 'notice-warning' : 'notice-info'}">${escapeHtml(gate.message)}</div>
+      </div>
+    `;
+  }
+
+  if (activity.type === "rate") {
+    const selectedRating = Number.isInteger(localEntry.choiceIndex) ? localEntry.choiceIndex + 1 : 0;
+    return `
+      <div class="activity-shell">
+        <div class="title-row">
+          <div><p class="section-kicker">Your rating</p><h2 class="activity-title">${escapeHtml(activity.question)}</h2><p class="body-copy">${escapeHtml(activity.prompt || "Choose a rating and optionally leave a comment.")}</p></div>
+          <span class="badge ${runtime.sharedState?.submissionsLocked ? 'badge-locked' : 'badge-open'}">${runtime.sharedState?.submissionsLocked ? 'Closed' : 'Open'}</span>
+        </div>
+        <form id="rating-response-form" class="stack-lg">
+          <div class="rating-row" role="radiogroup" aria-label="Rating">
+            ${Array.from({ length: activity.maxRating || 5 }, (_, i) => {
+              const value = i + 1;
+              const active = value <= selectedRating;
+              return `<button class="star-button ${active ? 'is-active' : ''}" type="button" data-rating-value="${value}" aria-pressed="${active ? 'true' : 'false'}" ${gate.canSubmit ? '' : 'disabled'}>${active ? '★' : '☆'}<span class="visually-hidden">${value} star${value === 1 ? '' : 's'}</span></button>`;
+            }).join("")}
+          </div>
+          ${activity.comment ? `<label class="field"><span>Comment (optional)</span><textarea id="rating-comment-input" maxlength="280" placeholder="Add a short comment…" ${gate.canSubmit ? '' : 'disabled'}>${escapeHtml(runtime.ratingCommentDraft)}</textarea></label>` : ""}
+          <button class="button button-primary button-lg" type="submit" ${gate.canSubmit && selectedRating ? '' : 'disabled'}>Submit rating</button>
+        </form>
+        <div class="notice ${gate.tone === 'warning' ? 'notice-warning' : 'notice-info'}">${escapeHtml(gate.message)}</div>
+      </div>
+    `;
+  }
+
+  if (activity.type === "kanban") {
+    return `
+      <div class="activity-shell">
+        <div class="title-row">
+          <div><p class="section-kicker">Add a card</p><h2 class="activity-title">${escapeHtml(activity.question)}</h2><p class="body-copy">${escapeHtml(activity.prompt || "Share an idea, reference, or useful link.")}</p></div>
+          <span class="badge ${runtime.sharedState?.submissionsLocked ? 'badge-locked' : 'badge-open'}">${runtime.sharedState?.submissionsLocked ? 'Closed' : 'Open'}</span>
+        </div>
+        <form id="kanban-response-form" class="stack-lg">
+          <label class="field"><span>Column</span>
+            <select id="kanban-column-select" ${gate.canSubmit ? '' : 'disabled'}>
+              ${(activity.columns || []).map((column) => `<option value="${escapeAttribute(column.id)}">${escapeHtml(column.title)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field"><span>Card text</span><textarea id="kanban-text-input" maxlength="280" placeholder="What would you like to add?" ${gate.canSubmit ? '' : 'disabled'}>${escapeHtml(runtime.kanbanTextDraft)}</textarea></label>
+          <label class="field"><span>Optional URL</span><input id="kanban-url-input" type="text" placeholder="https://example.com/resource" value="${escapeAttribute(runtime.kanbanUrlDraft)}" ${gate.canSubmit ? '' : 'disabled'} /></label>
+          <button class="button button-primary button-lg" type="submit" ${gate.canSubmit ? '' : 'disabled'}>Add card</button>
         </form>
         <div class="notice ${gate.tone === 'warning' ? 'notice-warning' : 'notice-info'}">${escapeHtml(gate.message)}</div>
       </div>
@@ -329,6 +419,23 @@ function renderResultsUI(runtime, activity, actState) {
     const texts = [...actState.texts].reverse();
     return texts.length ? `<div class="text-entry-list">${texts.map((e, i) => `<article class="text-card"><p>${escapeHtml(e.text)}</p><small>Response ${texts.length - i}</small></article>`).join("")}</div>` : renderEmptyState("No responses yet", "Text responses will appear here.");
   }
+  if (activity.type === "rate") {
+    const ratings = actState.ratings || [];
+    const average = ratings.length ? (ratings.reduce((sum, entry) => sum + entry.rating, 0) / ratings.length).toFixed(1) : "0.0";
+    const comments = ratings.filter((entry) => entry.comment);
+    return `
+      <div class="stack-lg">
+        <div class="metric-grid">
+          ${renderMetricCard("Average", `${average} / ${activity.maxRating || 5}`, "Live")}
+          ${renderMetricCard("Ratings", String(ratings.length), "Submitted")}
+        </div>
+        ${comments.length ? `<div class="text-entry-list">${comments.slice().reverse().map((entry) => `<article class="text-card"><p>${escapeHtml(entry.comment)}</p><small>${"★".repeat(entry.rating)}${"☆".repeat(Math.max((activity.maxRating || 5) - entry.rating, 0))}</small></article>`).join("")}</div>` : renderEmptyState("No comments yet", "Optional comments will appear here.")}
+      </div>
+    `;
+  }
+  if (activity.type === "kanban") {
+    return renderKanbanBoard(activity, actState.cards || []);
+  }
 
   const reveal = activity.type === "quiz" && isActivityRevealed(runtime.sharedState, activity.id);
   const total = getResponseTotal(activity, actState);
@@ -344,6 +451,7 @@ function renderResultsUI(runtime, activity, actState) {
 
 function getGate(runtime, activity) {
   if (!runtime.channel) return { canSubmit: false, message: "Not connected yet. Please wait.", tone: "warning" };
+  if (runtime.sharedState?.sessionClosed) return { canSubmit: false, message: "This session has been closed.", tone: "warning" };
   if (runtime.sharedState?.submissionsLocked) return { canSubmit: false, message: "Submissions are closed for this question.", tone: "warning" };
 
   const actState = runtime.sharedState?.activityStates?.[activity.id];
@@ -359,6 +467,8 @@ function getGate(runtime, activity) {
 }
 
 function bindSubmissions(runtime, activity) {
+  bindJoinForm(runtime);
+  bindQuestionForm(runtime);
   if (!activity) return;
 
   document.querySelectorAll("[data-submit-choice]").forEach((btn) => {
@@ -372,6 +482,49 @@ function bindSubmissions(runtime, activity) {
   const textForm = document.getElementById("text-response-form");
   textInput?.addEventListener("input", () => { runtime.textDraft = textInput.value; });
   textForm?.addEventListener("submit", async (e) => { e.preventDefault(); await submitText(runtime, activity); });
+
+  document.querySelectorAll("[data-rating-value]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = clampNumber(btn.getAttribute("data-rating-value"), 1, activity.maxRating || 5, 0);
+      const actState = runtime.sharedState?.activityStates?.[activity.id];
+      const entry = getLocalSubmissionEntry(runtime, activity.id, actState?.resetCount || 0);
+      entry.choiceIndex = value - 1;
+      const storeEntry = { countIncrement: 0, choiceIndex: value - 1 };
+      recordLocalSubmission(runtime, activity.id, storeEntry);
+      renderAudience(runtime);
+    });
+  });
+
+  const ratingCommentInput = document.getElementById("rating-comment-input");
+  const ratingForm = document.getElementById("rating-response-form");
+  ratingCommentInput?.addEventListener("input", () => { runtime.ratingCommentDraft = ratingCommentInput.value; });
+  ratingForm?.addEventListener("submit", async (e) => { e.preventDefault(); await submitRating(runtime, activity); });
+
+  const kanbanTextInput = document.getElementById("kanban-text-input");
+  const kanbanUrlInput = document.getElementById("kanban-url-input");
+  const kanbanForm = document.getElementById("kanban-response-form");
+  kanbanTextInput?.addEventListener("input", () => { runtime.kanbanTextDraft = kanbanTextInput.value; });
+  kanbanUrlInput?.addEventListener("input", () => { runtime.kanbanUrlDraft = kanbanUrlInput.value; });
+  kanbanForm?.addEventListener("submit", async (e) => { e.preventDefault(); await submitKanban(runtime, activity); });
+}
+
+function bindJoinForm(runtime) {
+  const form = document.getElementById("manual-join-form");
+  const input = document.getElementById("manual-room-code");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const normalized = sanitizeSimpleToken(input?.value || "");
+    if (!normalized) {
+      runtime.bannerMessage = "Enter a room code first.";
+      runtime.bannerTone = "warning";
+      renderAudience(runtime);
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("room", normalized);
+    if (runtime.sessionParam) url.searchParams.set("session", runtime.sessionParam);
+    window.location.href = url.toString();
+  });
 }
 
 async function submitChoice(runtime, activity, optionIndex) {
@@ -414,4 +567,176 @@ async function submitText(runtime, activity) {
     runtime.bannerTone = "warning";
   }
   renderAudience(runtime);
+}
+
+async function submitRating(runtime, activity) {
+  const gate = getGate(runtime, activity);
+  const actState = runtime.sharedState?.activityStates?.[activity.id];
+  const entry = getLocalSubmissionEntry(runtime, activity.id, actState?.resetCount || 0);
+  const rating = Number(entry.choiceIndex) + 1;
+  const commentInput = document.getElementById("rating-comment-input");
+  const comment = String(commentInput?.value || runtime.ratingCommentDraft || "").trim().slice(0, 280);
+
+  if (!gate.canSubmit) { runtime.bannerMessage = gate.message; runtime.bannerTone = gate.tone; renderAudience(runtime); return; }
+  if (!Number.isInteger(rating) || rating < 1 || rating > (activity.maxRating || 5)) {
+    runtime.bannerMessage = `Choose a rating from 1 to ${activity.maxRating || 5}.`;
+    runtime.bannerTone = "warning";
+    renderAudience(runtime);
+    return;
+  }
+
+  try {
+    await sendBroadcast(runtime.channel, "rating_submitted", {
+      activityId: activity.id, deviceId: runtime.deviceId, rating, comment, sentAt: new Date().toISOString()
+    });
+    recordLocalSubmission(runtime, activity.id, { countIncrement: 1, choiceIndex: rating - 1 });
+    runtime.ratingCommentDraft = "";
+    runtime.bannerMessage = "Rating submitted!";
+    runtime.bannerTone = "success";
+  } catch {
+    runtime.bannerMessage = "Submission failed. Check your connection.";
+    runtime.bannerTone = "warning";
+  }
+  renderAudience(runtime);
+}
+
+async function submitKanban(runtime, activity) {
+  const gate = getGate(runtime, activity);
+  const textInput = document.getElementById("kanban-text-input");
+  const urlInput = document.getElementById("kanban-url-input");
+  const columnSelect = document.getElementById("kanban-column-select");
+  const text = String(textInput?.value || runtime.kanbanTextDraft || "").trim();
+  const url = String(urlInput?.value || runtime.kanbanUrlDraft || "").trim();
+  const columnId = String(columnSelect?.value || activity.columns?.[0]?.id || "");
+
+  if (!gate.canSubmit) { runtime.bannerMessage = gate.message; runtime.bannerTone = gate.tone; renderAudience(runtime); return; }
+  if (!text) { runtime.bannerMessage = "Add some text for your card first."; runtime.bannerTone = "warning"; renderAudience(runtime); return; }
+  if (!activity.columns?.some((column) => column.id === columnId)) { runtime.bannerMessage = "Choose a valid column."; runtime.bannerTone = "warning"; renderAudience(runtime); return; }
+  if (url && !isLikelyUrl(url)) { runtime.bannerMessage = "Enter a valid URL or leave it blank."; runtime.bannerTone = "warning"; renderAudience(runtime); return; }
+
+  try {
+    await sendBroadcast(runtime.channel, "kanban_card_submitted", {
+      activityId: activity.id, deviceId: runtime.deviceId, columnId, text: text.slice(0, 280), url, sentAt: new Date().toISOString()
+    });
+    recordLocalSubmission(runtime, activity.id, { countIncrement: 1 });
+    runtime.kanbanTextDraft = "";
+    runtime.kanbanUrlDraft = "";
+    runtime.bannerMessage = "Card added!";
+    runtime.bannerTone = "success";
+  } catch {
+    runtime.bannerMessage = "Submission failed. Check your connection.";
+    runtime.bannerTone = "warning";
+  }
+  renderAudience(runtime);
+}
+
+function renderQuestionsPanel(runtime) {
+  return `
+    <div class="activity-shell">
+      <div class="title-row">
+        <div><p class="section-kicker">Anonymous question</p><h2 class="activity-title">Ask the presenter</h2></div>
+        <span class="badge badge-accent">${runtime.sharedState?.questions?.length || 0} sent</span>
+      </div>
+      <form id="question-form" class="stack-lg">
+        <label class="field"><span>Your question</span><textarea id="question-input" maxlength="280" placeholder="Type your question here…">${escapeHtml(runtime.questionDraft)}</textarea></label>
+        <button class="button button-secondary" type="submit" ${runtime.channel && !runtime.sharedState?.sessionClosed ? "" : "disabled"}>Send question</button>
+      </form>
+    </div>
+  `;
+}
+
+function bindQuestionForm(runtime) {
+  const input = document.getElementById("question-input");
+  const form = document.getElementById("question-form");
+  input?.addEventListener("input", () => { runtime.questionDraft = input.value; });
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!runtime.channel || runtime.sharedState?.sessionClosed) return;
+    const text = String(input?.value || runtime.questionDraft || "").trim();
+    if (!text) {
+      runtime.bannerMessage = "Type a question first.";
+      runtime.bannerTone = "warning";
+      renderAudience(runtime);
+      return;
+    }
+    try {
+      await sendBroadcast(runtime.channel, "question_submitted", {
+        id: `question-${runtime.deviceId}-${Date.now()}`,
+        text: text.slice(0, 280),
+        anonymous: true,
+        submittedAt: new Date().toISOString()
+      });
+      runtime.questionDraft = "";
+      runtime.bannerMessage = "Question sent.";
+      runtime.bannerTone = "success";
+    } catch {
+      runtime.bannerMessage = "Question failed to send. Check your connection.";
+      runtime.bannerTone = "warning";
+    }
+    renderAudience(runtime);
+  });
+}
+
+function normalizeQuestion(value) {
+  const id = String(value?.id || "").trim();
+  const text = String(value?.text || "").trim().slice(0, 280);
+  if (!id || !text) return null;
+  return { id, text, anonymous: value?.anonymous !== false, submittedAt: String(value?.submittedAt || new Date().toISOString()) };
+}
+
+function normalizeRatingEntry(value, activity, fallbackId) {
+  const rating = clampNumber(value?.rating, 1, activity?.maxRating || 5, 0);
+  if (!rating) return null;
+  return {
+    id: String(value?.id || fallbackId),
+    rating,
+    comment: String(value?.comment || "").trim().slice(0, 280),
+    submittedAt: String(value?.submittedAt || new Date().toISOString())
+  };
+}
+
+function normalizeKanbanCard(value, activity, fallbackId) {
+  const text = String(value?.text || "").trim().slice(0, 280);
+  const columnId = String(value?.columnId || "").trim();
+  if (!text || !columnId || !activity?.columns?.some((column) => column.id === columnId)) return null;
+  return {
+    id: String(value?.id || fallbackId),
+    columnId,
+    text,
+    url: String(value?.url || "").trim().slice(0, 1000),
+    submittedAt: String(value?.submittedAt || new Date().toISOString())
+  };
+}
+
+function renderKanbanBoard(activity, cards) {
+  return `<div class="kanban-board">${(activity.columns || []).map((column) => {
+    const columnCards = cards.filter((card) => card.columnId === column.id).slice().reverse();
+    return `<section class="kanban-column"><div class="choice-header"><span>${escapeHtml(column.title)}</span><span class="badge badge-accent">${columnCards.length}</span></div>${columnCards.length ? columnCards.map(renderKanbanCard).join("") : '<div class="notice notice-info">No cards yet.</div>'}</section>`;
+  }).join("")}</div>`;
+}
+
+function renderKanbanCard(card) {
+  const preview = renderUrlPreview(card.url);
+  return `<article class="text-card"><p>${escapeHtml(card.text)}</p>${preview}${card.submittedAt ? `<small>${escapeHtml(new Date(card.submittedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</small>` : ""}</article>`;
+}
+
+function renderUrlPreview(url) {
+  if (!url) return "";
+  const safeUrl = escapeAttribute(url);
+  if (/\.(gif|png|jpe?g|webp|svg)(\?.*)?$/i.test(url)) {
+    return `<div class="media-preview"><img src="${safeUrl}" alt="Card preview" loading="lazy" /></div>`;
+  }
+  if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(url)) {
+    return `<div class="media-preview"><video src="${safeUrl}" controls preload="metadata"></video></div>`;
+  }
+  return `<p><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></p>`;
+}
+
+function isLikelyUrl(value) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
 }

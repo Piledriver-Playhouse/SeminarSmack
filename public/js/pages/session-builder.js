@@ -1,7 +1,7 @@
 /**
  * session-builder.js — Browser-based session creation for SeminarSmack.
  *
- * Teachers fill in a title, add activities (poll / quiz / text), and
+ * Teachers fill in a title, add activities (poll / quiz / text / rate / kanban), and
  * click "Start session". The session is saved to localStorage and the
  * browser redirects to the presenter page.
  *
@@ -89,7 +89,7 @@ function render() {
         <p class="section-kicker">Activities (${state.activities.length})</p>
         <div id="activities-list" class="stack-lg">
           ${state.activities.length === 0
-            ? `<div class="empty-state"><p class="body-copy">No activities yet. Add a poll, quiz, or text question below.</p></div>`
+            ? `<div class="empty-state"><p class="body-copy">No activities yet. Add a poll, quiz, text, rating, or kanban activity below.</p></div>`
             : state.activities.map((a, i) => renderActivityCard(a, i)).join("")
           }
         </div>
@@ -122,6 +122,20 @@ function render() {
               <span>Open-ended short response</span>
             </div>
           </button>
+          <button class="type-option" type="button" data-add-type="rate">
+            <div class="type-icon">⭐</div>
+            <div class="type-option-info">
+              <span class="type-name">Rating</span>
+              <span>1-5 stars with optional comment</span>
+            </div>
+          </button>
+          <button class="type-option" type="button" data-add-type="kanban">
+            <div class="type-icon">🗂️</div>
+            <div class="type-option-info">
+              <span class="type-name">Kanban</span>
+              <span>Collect cards into configured columns</span>
+            </div>
+          </button>
         </div>
       </div>
 
@@ -148,7 +162,15 @@ function render() {
 }
 
 function renderActivityCard(activity, index) {
-  const typeLabel = activity.type === "quiz" ? "Quiz" : activity.type === "text" ? "Short text" : "Poll";
+  const typeLabel = activity.type === "quiz"
+    ? "Quiz"
+    : activity.type === "text"
+      ? "Short text"
+      : activity.type === "rate"
+        ? "Rating"
+        : activity.type === "kanban"
+          ? "Kanban"
+          : "Poll";
   const total = state.activities.length;
 
   let optionsHtml = "";
@@ -180,6 +202,40 @@ function renderActivityCard(activity, index) {
     `;
   }
 
+  let rateSettingsHtml = "";
+  if (activity.type === "rate") {
+    rateSettingsHtml = `
+      <div class="field-grid">
+        <label class="field">
+          <span>Max rating</span>
+          <input type="number" min="1" max="10" value="${activity.maxRating || 5}" data-activity-maxrating="${index}" />
+        </label>
+        <label class="field">
+          <span>Allow comment</span>
+          <select data-activity-comment="${index}">
+            <option value="true" ${activity.comment ? "selected" : ""}>Yes</option>
+            <option value="false" ${activity.comment ? "" : "selected"}>No</option>
+          </select>
+        </label>
+      </div>
+    `;
+  }
+
+  let kanbanSettingsHtml = "";
+  if (activity.type === "kanban") {
+    kanbanSettingsHtml = `
+      <div class="stack">
+        ${(activity.columns || []).map((column, columnIndex) => `
+          <div class="builder-option-row">
+            <input type="text" value="${escapeAttribute(column.title)}" data-column-title="${index}" data-column-index="${columnIndex}" placeholder="Column ${columnIndex + 1}" />
+            <button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-column="${index}" data-column-remove-index="${columnIndex}">✕</button>
+          </div>
+        `).join("")}
+        <button type="button" class="button button-ghost" style="justify-self: start;" data-add-column="${index}">+ Add column</button>
+      </div>
+    `;
+  }
+
   return `
     <div class="builder-activity-card">
       <div class="builder-activity-header">
@@ -196,6 +252,8 @@ function renderActivityCard(activity, index) {
       </div>
       ${optionsHtml}
       ${textSettingsHtml}
+      ${rateSettingsHtml}
+      ${kanbanSettingsHtml}
     </div>
   `;
 }
@@ -324,6 +382,51 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-activity-maxrating]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const idx = Number(input.dataset.activityMaxrating);
+      state.activities[idx].maxRating = Number(input.value) || 5;
+      saveDraft();
+    });
+  });
+
+  document.querySelectorAll("[data-activity-comment]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const idx = Number(select.dataset.activityComment);
+      state.activities[idx].comment = select.value === "true";
+      saveDraft();
+    });
+  });
+
+  document.querySelectorAll("[data-column-title]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const idx = Number(input.dataset.columnTitle);
+      const columnIndex = Number(input.dataset.columnIndex);
+      state.activities[idx].columns[columnIndex].title = input.value;
+      saveDraft();
+    });
+  });
+
+  document.querySelectorAll("[data-add-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const idx = Number(button.dataset.addColumn);
+      const columnCount = state.activities[idx].columns.length + 1;
+      state.activities[idx].columns.push({ id: `column-${columnCount}`, title: "" });
+      saveDraft();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const idx = Number(button.dataset.removeColumn);
+      const columnIndex = Number(button.dataset.columnRemoveIndex);
+      state.activities[idx].columns.splice(columnIndex, 1);
+      saveDraft();
+      render();
+    });
+  });
+
   // Start session
   document.getElementById("start-session")?.addEventListener("click", () => {
     startSession();
@@ -378,6 +481,19 @@ function addActivity(type) {
     activity.maxLength = 180;
   }
 
+  if (type === "rate") {
+    activity.maxRating = 5;
+    activity.comment = true;
+  }
+
+  if (type === "kanban") {
+    activity.columns = [
+      { id: "ideas", title: "Ideas" },
+      { id: "in-progress", title: "In Progress" },
+      { id: "done", title: "Done" }
+    ];
+  }
+
   state.activities.push(activity);
   saveDraft();
   render();
@@ -401,6 +517,16 @@ function buildSessionObject() {
       }
       if (a.type === "text") {
         out.maxLength = a.maxLength || 180;
+      }
+      if (a.type === "rate") {
+        out.maxRating = a.maxRating || 5;
+        out.comment = Boolean(a.comment);
+      }
+      if (a.type === "kanban") {
+        out.columns = (a.columns || []).map((column, columnIndex) => ({
+          id: sanitizeActivityId(column.id || `column-${columnIndex + 1}`, columnIndex),
+          title: String(column.title || "").trim()
+        })).filter((column) => column.title);
       }
       return out;
     })

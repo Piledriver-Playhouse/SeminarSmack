@@ -31,7 +31,9 @@ export async function initPresenterPage() {
     presenterState: null, authoringDraft: "",
     bannerMessage: "", bannerTone: "info",
     connectionLabel: "Not connected", connectionTone: "muted",
-    snapshotTimer: null, heartbeatId: null
+    snapshotTimer: null, heartbeatId: null,
+    knownQuestionIds: new Set(),
+    audioPrimed: false
   };
 
   if (!room) {
@@ -85,6 +87,9 @@ export async function initPresenterPage() {
       vote_submitted: async (p) => handleSubmission(runtime, "poll", p),
       quiz_submitted: async (p) => handleSubmission(runtime, "quiz", p),
       text_submitted: async (p) => handleSubmission(runtime, "text", p),
+      rating_submitted: async (p) => handleSubmission(runtime, "rate", p),
+      kanban_card_submitted: async (p) => handleSubmission(runtime, "kanban", p),
+      question_submitted: async (p) => handleQuestionSubmitted(runtime, p),
       activity_changed: async (p) => {
         const ok = await verifyEventIfNeeded(runtime, "activity_changed", p);
         if (!ok || !runtime.session || !runtime.presenterState) return;
@@ -168,6 +173,7 @@ function attachSession(runtime, session, sourceLabel) {
         runtime.presenterState.currentActivityIndex = clampIndex(Number(sticky.currentActivityIndex), session.activities.length);
         runtime.presenterState.submissionsLocked = Boolean(sticky.submissionsLocked);
         runtime.presenterState.revealedActivityIds = new Set(Array.isArray(sticky.revealedActivityIds) ? sticky.revealedActivityIds : []);
+        runtime.presenterState.sessionClosed = Boolean(sticky.sessionClosed);
       }
     }
   } catch {}
@@ -179,7 +185,8 @@ function saveStickyState(runtime) {
     sessionHash: runtime.sessionHash,
     currentActivityIndex: runtime.presenterState.currentActivityIndex,
     submissionsLocked: runtime.presenterState.submissionsLocked,
-    revealedActivityIds: [...runtime.presenterState.revealedActivityIds]
+    revealedActivityIds: [...runtime.presenterState.revealedActivityIds],
+    sessionClosed: runtime.presenterState.sessionClosed
   };
   window.localStorage.setItem(`seminarsmack:sticky:${runtime.room}`, JSON.stringify(sticky));
 }
@@ -202,6 +209,7 @@ function renderPresenter(runtime) {
   const controlPanel = document.getElementById("control-panel");
   const activityStage = document.getElementById("activity-stage");
   const resultsStage = document.getElementById("results-stage");
+  const questionsPanel = document.getElementById("questions-panel");
   const authoringPanel = document.getElementById("authoring-panel");
   const qrPanel = document.getElementById("qr-panel");
   const pageStatus = document.getElementById("page-status");
@@ -212,11 +220,12 @@ function renderPresenter(runtime) {
 
   setBanner(pageStatus, runtime.bannerMessage, runtime.bannerTone);
 
-  if (!sessionSummary || !controlPanel || !activityStage || !resultsStage || !authoringPanel) return;
+  if (!sessionSummary || !controlPanel || !activityStage || !resultsStage || !questionsPanel || !authoringPanel) return;
 
   const activity = getCurrentActivity(runtime.session, runtime.presenterState);
   const actState = activity ? runtime.presenterState?.activityStates[activity.id] : null;
   const disabled = !runtime.hostToken || !runtime.session || !runtime.presenterState;
+  const controlsDisabled = disabled || runtime.presenterState?.sessionClosed;
   const canReveal = Boolean(activity && activity.type === "quiz");
   const isRevealed = activity ? isActivityRevealed(runtime.presenterState, activity.id) : false;
 
@@ -240,6 +249,7 @@ function renderPresenter(runtime) {
         ${renderMetricCard("Activities", String(runtime.session.activities.length), runtime.sessionSource)}
         ${renderMetricCard("Current", activity ? `${getActivityNumber(runtime.session, activity.id)} / ${runtime.session.activities.length}` : "—", activity ? humanizeType(activity.type) : "None")}
         ${renderMetricCard("Status", escapeHtml(runtime.connectionLabel), runtime.connectionTone === "success" ? "Live" : "Offline")}
+        ${renderMetricCard("Questions", String(runtime.presenterState?.questions?.length || 0), "Anonymous")}
       </div>
     </div>
   ` : renderEmptyState("No session loaded", "Create a session first or add ?session=filename to the URL.");
@@ -268,11 +278,13 @@ function renderPresenter(runtime) {
     <div class="controls-shell">
       <p class="section-kicker">Controls</p>
       <div class="control-row">
-        <button id="prev-activity" class="button button-ghost" type="button" ${disabled || !activity || getActivityNumber(runtime.session, activity.id) === 1 ? 'disabled' : ''}>← Previous</button>
-        <button id="next-activity" class="button button-primary" type="button" ${disabled || !activity || getActivityNumber(runtime.session, activity.id) === runtime.session?.activities.length ? 'disabled' : ''}>Next →</button>
-        <button id="toggle-lock" class="button button-secondary" type="button" ${disabled || !activity ? 'disabled' : ''}>${runtime.presenterState?.submissionsLocked ? 'Open submissions' : 'Close submissions'}</button>
-        <button id="reset-activity" class="button button-danger" type="button" ${disabled || !activity ? 'disabled' : ''}>Reset & Allow Resubmission</button>
-        <button id="toggle-reveal" class="button button-ghost" type="button" ${disabled || !canReveal ? 'disabled' : ''}>${isRevealed ? 'Hide answer' : 'Reveal answer'}</button>
+        <button id="prev-activity" class="button button-ghost" type="button" ${controlsDisabled || !activity || getActivityNumber(runtime.session, activity.id) === 1 ? 'disabled' : ''}>← Previous</button>
+        <button id="next-activity" class="button button-primary" type="button" ${controlsDisabled || !activity || getActivityNumber(runtime.session, activity.id) === runtime.session?.activities.length ? 'disabled' : ''}>Next →</button>
+        <button id="toggle-lock" class="button button-secondary" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>${runtime.presenterState?.submissionsLocked ? 'Open submissions' : 'Close submissions'}</button>
+        <button id="reset-activity" class="button button-danger" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>Reset & Allow Resubmission</button>
+        <button id="toggle-reveal" class="button button-ghost" type="button" ${controlsDisabled || !canReveal ? 'disabled' : ''}>${isRevealed ? 'Hide answer' : 'Reveal answer'}</button>
+        <button id="close-session" class="button button-danger" type="button" ${disabled || runtime.presenterState?.sessionClosed ? 'disabled' : ''}>${runtime.presenterState?.sessionClosed ? 'Session closed' : 'Close session'}</button>
+        <button id="export-responses" class="button button-ghost" type="button" ${disabled ? 'disabled' : ''}>Export responses</button>
       </div>
 
     </div>
@@ -306,6 +318,21 @@ function renderPresenter(runtime) {
       ${renderResults(runtime, activity, actState)}
     </div>
   ` : renderEmptyState("No results", "Results appear once students submit.");
+
+  questionsPanel.innerHTML = `
+    <div class="activity-shell">
+      <div class="title-row">
+        <div>
+          <p class="section-kicker">Anonymous questions</p>
+          <h2 class="activity-title">Live question feed</h2>
+        </div>
+        <span class="badge badge-accent">${runtime.presenterState?.questions?.length || 0}</span>
+      </div>
+      ${runtime.presenterState?.questions?.length
+        ? `<div class="text-entry-list">${runtime.presenterState.questions.slice().reverse().map((question) => `<article class="text-card"><p>${escapeHtml(question.text)}</p><small>${escapeHtml(new Date(question.submittedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</small></article>`).join("")}</div>`
+        : renderEmptyState("No questions yet", "Questions from participants will appear here live.")}
+    </div>
+  `;
 
   // Authoring
   authoringPanel.innerHTML = `
@@ -374,6 +401,22 @@ function renderPresenterPreview(runtime, activity, actState) {
     `;
   }
 
+  if (activity.type === "rate") {
+    const ratings = actState?.ratings || [];
+    const average = ratings.length ? (ratings.reduce((sum, entry) => sum + entry.rating, 0) / ratings.length).toFixed(1) : "0.0";
+    return `
+      <div class="metric-grid">
+        ${renderMetricCard("Ratings", String(ratings.length), "Submitted")}
+        ${renderMetricCard("Average", `${average} / ${activity.maxRating || 5}`, "Live")}
+        ${renderMetricCard("Comments", String(ratings.filter((entry) => entry.comment).length), "Optional")}
+      </div>
+    `;
+  }
+
+  if (activity.type === "kanban") {
+    return renderKanbanBoard(activity, actState?.cards || []);
+  }
+
   const isRevealed = isActivityRevealed(runtime.presenterState, activity.id);
   return `
     <div class="choice-grid">
@@ -403,6 +446,26 @@ function renderResults(runtime, activity, actState) {
     `).join("")}</div>` : renderEmptyState("No text yet", "Responses appear as students submit.");
   }
 
+  if (activity.type === "rate") {
+    const ratings = actState.ratings || [];
+    const average = ratings.length ? (ratings.reduce((sum, entry) => sum + entry.rating, 0) / ratings.length).toFixed(1) : "0.0";
+    const comments = ratings.filter((entry) => entry.comment);
+    return `
+      <div class="stack-lg">
+        <div class="metric-grid">
+          ${renderMetricCard("Average", `${average} / ${activity.maxRating || 5}`, "Live")}
+          ${renderMetricCard("Ratings", String(ratings.length), "Submitted")}
+          ${renderMetricCard("Comments", String(comments.length), "Optional")}
+        </div>
+        ${comments.length ? `<div class="text-entry-list">${comments.slice().reverse().map((entry) => `<article class="text-card"><p>${escapeHtml(entry.comment)}</p><small>${"★".repeat(entry.rating)}${"☆".repeat(Math.max((activity.maxRating || 5) - entry.rating, 0))}</small></article>`).join("")}</div>` : renderEmptyState("No comments yet", "Optional comments will appear here.")}
+      </div>
+    `;
+  }
+
+  if (activity.type === "kanban") {
+    return renderKanbanBoard(activity, actState.cards || []);
+  }
+
   const revealCorrect = activity.type === "quiz" && isActivityRevealed(runtime.presenterState, activity.id);
   const total = getResponseTotal(activity, actState);
   return `<div class="choice-grid">${activity.options.map((opt, i) => {
@@ -428,6 +491,12 @@ function bindInteractions(runtime) {
   document.getElementById("toggle-lock")?.addEventListener("click", () => toggleLock(runtime));
   document.getElementById("reset-activity")?.addEventListener("click", () => resetCurrent(runtime));
   document.getElementById("toggle-reveal")?.addEventListener("click", () => toggleReveal(runtime));
+  document.getElementById("close-session")?.addEventListener("click", () => closeSession(runtime));
+  document.getElementById("export-responses")?.addEventListener("click", () => exportResponses(runtime));
+
+  document.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => { runtime.audioPrimed = true; }, { once: true });
+  });
 
   const jsonInput = document.getElementById("session-json-input");
   jsonInput?.addEventListener("input", () => { runtime.authoringDraft = jsonInput.value; });
@@ -528,6 +597,26 @@ async function handleSubmission(runtime, expectedType, payload) {
     const text = String(payload.text || "").trim();
     if (!text || text.length > getTextMaxLength(activity) || entry.count >= SUBMISSION_LIMITS.text) return;
     actState.texts.push({ id: `${deviceId}-${Date.now()}`, text, submittedAt: new Date().toISOString() });
+  } else if (expectedType === "rate") {
+    const rating = clampNumber(payload.rating, 1, activity.maxRating || 5, 0);
+    if (!rating || entry.count >= SUBMISSION_LIMITS.rate) return;
+    const comment = String(payload.comment || "").trim().slice(0, 280);
+    actState.ratings.push({ id: `${deviceId}-${Date.now()}`, rating, comment, submittedAt: new Date().toISOString() });
+    entry.choiceIndex = rating - 1;
+  } else if (expectedType === "kanban") {
+    const text = String(payload.text || "").trim().slice(0, 280);
+    const url = String(payload.url || "").trim().slice(0, 1000);
+    const columnId = String(payload.columnId || "").trim();
+    if (!text || !activity.columns?.some((column) => column.id === columnId) || entry.count >= SUBMISSION_LIMITS.kanban) return;
+    if (url) {
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return;
+      } catch {
+        return;
+      }
+    }
+    actState.cards.push({ id: `${deviceId}-${Date.now()}`, columnId, text, url, submittedAt: new Date().toISOString() });
   } else {
     const oi = Number(payload.optionIndex);
     if (!Number.isInteger(oi) || oi < 0 || oi >= activity.options.length || entry.count >= SUBMISSION_LIMITS[expectedType]) return;
@@ -542,6 +631,21 @@ async function handleSubmission(runtime, expectedType, payload) {
   runtime.presenterState.revision += 1;
   renderPresenter(runtime);
   scheduleSnapshot(runtime, "submission");
+}
+
+async function handleQuestionSubmitted(runtime, payload) {
+  if (!runtime.presenterState) return;
+  const question = normalizeQuestion(payload);
+  if (!question || runtime.presenterState.questions.some((entry) => entry.id === question.id)) return;
+  runtime.presenterState.questions.push(question);
+  runtime.presenterState.revision += 1;
+  if (runtime.knownQuestionIds.has(question.id)) return;
+  runtime.knownQuestionIds.add(question.id);
+  if (runtime.audioPrimed) {
+    void playQuestionSound().catch(() => {});
+  }
+  renderPresenter(runtime);
+  scheduleSnapshot(runtime, "question_submitted");
 }
 
 // ── Broadcasting ───────────────────────────────────────────────
@@ -566,7 +670,7 @@ function scheduleSnapshot(runtime, reason) {
 
 function buildSnapshot(runtime, reason) {
   const states = Object.fromEntries(
-    Object.entries(runtime.presenterState.activityStates).map(([id, s]) => [id, { counts: [...s.counts], texts: s.texts.map((e) => ({ id: e.id, text: e.text, submittedAt: e.submittedAt })), resetCount: s.resetCount }])
+    Object.entries(runtime.presenterState.activityStates).map(([id, s]) => [id, { counts: [...s.counts], texts: s.texts.map((e) => ({ id: e.id, text: e.text, submittedAt: e.submittedAt })), ratings: s.ratings.map((entry) => ({ ...entry })), cards: s.cards.map((entry) => ({ ...entry })), resetCount: s.resetCount }])
   );
   return {
     reason, revision: runtime.presenterState.revision, session: runtime.session,
@@ -574,6 +678,109 @@ function buildSnapshot(runtime, reason) {
     currentActivityIndex: runtime.presenterState.currentActivityIndex,
     submissionsLocked: runtime.presenterState.submissionsLocked,
     revealedActivityIds: [...runtime.presenterState.revealedActivityIds],
-    activityStates: states, sentAt: new Date().toISOString()
+    activityStates: states,
+    questions: runtime.presenterState.questions.map((question) => ({ ...question })),
+    sessionClosed: runtime.presenterState.sessionClosed,
+    sentAt: new Date().toISOString()
   };
+}
+
+async function closeSession(runtime) {
+  if (!runtime.presenterState || !runtime.hostToken || runtime.presenterState.sessionClosed) return;
+  runtime.presenterState.sessionClosed = true;
+  runtime.presenterState.submissionsLocked = true;
+  runtime.presenterState.revision += 1;
+  saveStickyState(runtime);
+  await sendPresenterEvent(runtime, "session_closed", { revision: runtime.presenterState.revision, sessionClosed: true });
+  await broadcastSnapshot(runtime, "session_closed");
+  runtime.bannerMessage = "Session closed. You can still export responses.";
+  runtime.bannerTone = "success";
+  renderPresenter(runtime);
+}
+
+function exportResponses(runtime) {
+  if (!runtime.session || !runtime.presenterState) return;
+  const payload = {
+    sessionCode: runtime.room,
+    sessionTitle: runtime.session.title,
+    exportedAt: new Date().toISOString(),
+    activities: runtime.session.activities.map((activity) => {
+      const state = runtime.presenterState.activityStates[activity.id];
+      const base = {
+        id: activity.id,
+        type: activity.type,
+        title: activity.question,
+        prompt: activity.prompt || ""
+      };
+      if (activity.type === "poll" || activity.type === "quiz") {
+        return {
+          ...base,
+          options: activity.options || [],
+          counts: [...(state?.counts || [])]
+        };
+      }
+      if (activity.type === "text") {
+        return { ...base, responses: state?.texts || [] };
+      }
+      if (activity.type === "rate") {
+        return { ...base, maxRating: activity.maxRating || 5, responses: state?.ratings || [] };
+      }
+      if (activity.type === "kanban") {
+        return { ...base, columns: activity.columns || [], responses: state?.cards || [] };
+      }
+      return { ...base };
+    }),
+    questions: runtime.presenterState.questions.map((question) => ({ ...question }))
+  };
+  downloadText(`seminarsmack-session-${runtime.room || "session"}-responses.json`, JSON.stringify(payload, null, 2));
+}
+
+function normalizeQuestion(value) {
+  const id = String(value?.id || "").trim();
+  const text = String(value?.text || "").trim().slice(0, 280);
+  if (!id || !text) return null;
+  return { id, text, anonymous: value?.anonymous !== false, submittedAt: String(value?.submittedAt || new Date().toISOString()) };
+}
+
+function renderKanbanBoard(activity, cards) {
+  return `<div class="kanban-board">${(activity.columns || []).map((column) => {
+    const columnCards = cards.filter((card) => card.columnId === column.id).slice().reverse();
+    return `<section class="kanban-column"><div class="choice-header"><span>${escapeHtml(column.title)}</span><span class="badge badge-accent">${columnCards.length}</span></div>${columnCards.length ? columnCards.map(renderKanbanCard).join("") : '<div class="notice notice-info">No cards yet.</div>'}</section>`;
+  }).join("")}</div>`;
+}
+
+function renderKanbanCard(card) {
+  const preview = renderUrlPreview(card.url);
+  return `<article class="text-card"><p>${escapeHtml(card.text)}</p>${preview}${card.submittedAt ? `<small>${escapeHtml(new Date(card.submittedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</small>` : ""}</article>`;
+}
+
+function renderUrlPreview(url) {
+  if (!url) return "";
+  const safeUrl = escapeAttribute(url);
+  if (/\.(gif|png|jpe?g|webp|svg)(\?.*)?$/i.test(url)) {
+    return `<div class="media-preview"><img src="${safeUrl}" alt="Card preview" loading="lazy" /></div>`;
+  }
+  if (/\.(mp4|webm|ogg)(\?.*)?$/i.test(url)) {
+    return `<div class="media-preview"><video src="${safeUrl}" controls preload="metadata"></video></div>`;
+  }
+  return `<p><a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></p>`;
+}
+
+async function playQuestionSound() {
+  if (!window.AudioContext && !window.webkitAudioContext) return;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const context = new AudioCtx();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(880, context.currentTime);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.05, context.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.2);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.22);
+  await new Promise((resolve) => { oscillator.onended = resolve; });
+  if (context.state !== "closed") await context.close();
 }

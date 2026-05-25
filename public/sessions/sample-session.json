@@ -28,6 +28,25 @@
         "It requires participants to sign in"
       ],
       "correctIndex": 1
+    },
+    {
+      "id": "rate-session-feedback",
+      "type": "rate",
+      "title": "How useful was this session?",
+      "prompt": "Rate the session and optionally leave a comment.",
+      "maxRating": 5,
+      "comment": true
+    },
+    {
+      "id": "project-kanban",
+      "type": "kanban",
+      "title": "Project Ideas Board",
+      "prompt": "Add an idea, reference image, video, GIF, or useful link.",
+      "columns": [
+        { "id": "ideas", "title": "Ideas" },
+        { "id": "in-progress", "title": "In Progress" },
+        { "id": "done", "title": "Done" }
+      ]
     }
   ]
 }

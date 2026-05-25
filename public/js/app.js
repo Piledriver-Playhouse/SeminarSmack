@@ -13,11 +13,15 @@
 /**
  * @typedef {Object} SessionActivity
  * @property {string} id - Unique identifier for the activity.
- * @property {"poll"|"quiz"|"text"} type - Type of the activity.
+ * @property {"poll"|"quiz"|"text"|"rate"|"kanban"} type - Type of the activity.
  * @property {string} question - The main text of the activity.
+ * @property {string} [prompt] - Optional supporting prompt text.
  * @property {string[]} [options] - Available options for polls and quizzes.
  * @property {number|null} [correctIndex] - The index of the correct option (quizzes only).
  * @property {number} [maxLength] - Maximum character limit for text responses.
+ * @property {number} [maxRating] - Maximum rating value for rate activities.
+ * @property {boolean} [comment] - Whether rate activities allow comments.
+ * @property {Array<{id: string, title: string}>} [columns] - Configured columns for kanban activities.
  */
 
 /**
@@ -31,6 +35,8 @@
  * @typedef {Object} PresenterActivityState
  * @property {number[]} counts - Array of response counts per option (polls/quizzes).
  * @property {Array<{id: string, text: string, submittedAt: string}>} texts - List of text responses.
+ * @property {Array<{id: string, rating: number, comment: string, submittedAt: string}>} ratings - List of ratings.
+ * @property {Array<{id: string, columnId: string, text: string, url: string, submittedAt: string}>} cards - List of kanban cards.
  * @property {Object.<string, {count: number, lastSubmittedAt: number, choiceIndex: number|null, resetCount: number}>} submissionsByDevice - Map of device ID to submission record.
  * @property {number} resetCount - Number of times the activity has been reset.
  */
@@ -42,6 +48,8 @@
  * @property {boolean} submissionsLocked - Whether the current activity accepts new submissions.
  * @property {Set<string>} revealedActivityIds - Set of activity IDs whose correct answers have been revealed.
  * @property {Object.<string, PresenterActivityState>} activityStates - Map of activity IDs to their states.
+ * @property {Array<{id: string, text: string, anonymous: boolean, submittedAt: string}>} questions - Anonymous questions.
+ * @property {boolean} sessionClosed - Whether the presenter has closed the session.
  */
 
 /**
@@ -50,7 +58,9 @@
  * @property {number} currentActivityIndex - The index of the currently active activity.
  * @property {boolean} submissionsLocked - Whether the current activity accepts new submissions.
  * @property {Set<string>} revealedActivityIds - Set of activity IDs whose correct answers have been revealed.
- * @property {Object.<string, {counts: number[], texts: Array<{id: string, text: string, submittedAt: string}>, resetCount: number}>} activityStates - Sanitised public state.
+ * @property {Object.<string, {counts: number[], texts: Array<{id: string, text: string, submittedAt: string}>, ratings: Array<{id: string, rating: number, comment: string, submittedAt: string}>, cards: Array<{id: string, columnId: string, text: string, url: string, submittedAt: string}>, resetCount: number}>} activityStates - Sanitised public state.
+ * @property {Array<{id: string, text: string, anonymous: boolean, submittedAt: string}>} questions - Anonymous questions.
+ * @property {boolean} sessionClosed - Whether the presenter has closed the session.
  */
 
 import {
@@ -69,8 +79,8 @@ export const PRESENTER_HEARTBEAT_MS = 5000;
 export const SNAPSHOT_DEBOUNCE_MS = 180;
 export const DEVICE_STORAGE_KEY = "seminarsmack:device-id";
 export const SESSION_STORAGE_PREFIX = "seminarsmack:session:";
-export const SUPPORTED_ACTIVITY_TYPES = new Set(["poll", "text", "quiz"]);
-export const SUBMISSION_LIMITS = { poll: 1, quiz: 1, text: 2 };
+export const SUPPORTED_ACTIVITY_TYPES = new Set(["poll", "text", "quiz", "rate", "kanban"]);
+export const SUBMISSION_LIMITS = { poll: 1, quiz: 1, text: 2, rate: 1, kanban: 3 };
 
 const ROOM_WORDS = [
   "spark", "chalk", "forum", "scope", "orbit",
@@ -241,7 +251,7 @@ export function validateSession(raw) {
     : [];
 
   if (Array.isArray(raw.activities) && activities.length !== raw.activities.length) {
-    errors.push("Every activity must include id, type, and question.");
+    errors.push("Every activity must include id, type, and a question or title.");
   }
 
   const dupes = findDuplicateIds(activities.map((a) => a.id));
@@ -250,6 +260,12 @@ export function validateSession(raw) {
   activities.forEach((a) => {
     if ((a.type === "poll" || a.type === "quiz") && a.options.length < 2) {
       errors.push(`${a.id} must include at least two options.`);
+    }
+    if (a.type === "rate" && (a.maxRating < 1 || a.maxRating > 10)) {
+      errors.push(`${a.id} has an invalid maxRating.`);
+    }
+    if (a.type === "kanban" && (!Array.isArray(a.columns) || a.columns.length === 0)) {
+      errors.push(`${a.id} must include at least one column.`);
     }
     if (
       a.type === "quiz" &&
@@ -282,10 +298,14 @@ export function normalizeActivity(activity, index) {
   const id = sanitizeActivityId(activity.id, index);
   const type = typeof activity.type === "string" ? activity.type.trim().toLowerCase() : "";
   const question = typeof activity.question === "string" ? activity.question.trim() : "";
+  const title = typeof activity.title === "string" ? activity.title.trim() : "";
+  const prompt = typeof activity.prompt === "string" ? activity.prompt.trim() : "";
+  const primaryQuestion = question || title;
 
-  if (!id || !SUPPORTED_ACTIVITY_TYPES.has(type) || !question) return null;
+  if (!id || !SUPPORTED_ACTIVITY_TYPES.has(type) || !primaryQuestion) return null;
 
-  const normalized = { id, type, question };
+  const normalized = { id, type, question: primaryQuestion };
+  if (prompt) normalized.prompt = prompt;
 
   if (type === "poll" || type === "quiz") {
     normalized.options = Array.isArray(activity.options)
@@ -299,6 +319,24 @@ export function normalizeActivity(activity, index) {
 
   if (type === "quiz") {
     normalized.correctIndex = Number.isInteger(activity.correctIndex) ? activity.correctIndex : null;
+  }
+
+  if (type === "rate") {
+    normalized.maxRating = clampNumber(activity.maxRating, 1, 10, 5);
+    normalized.comment = Boolean(activity.comment);
+  }
+
+  if (type === "kanban") {
+    normalized.columns = Array.isArray(activity.columns)
+      ? activity.columns
+        .map((column, columnIndex) => {
+          const columnId = sanitizeActivityId(column?.id || `column-${columnIndex + 1}`, columnIndex);
+          const columnTitle = String(column?.title || "").trim();
+          if (!columnId || !columnTitle) return null;
+          return { id: columnId, title: columnTitle };
+        })
+        .filter(Boolean)
+      : [];
   }
 
   return normalized;
@@ -318,6 +356,8 @@ export function createPresenterState(session) {
     currentActivityIndex: 0,
     submissionsLocked: false,
     revealedActivityIds: new Set(),
+    questions: [],
+    sessionClosed: false,
     activityStates: Object.fromEntries(
       session.activities.map((a) => [a.id, createPresenterActivityState(a)])
     )
@@ -334,6 +374,8 @@ export function createPresenterActivityState(activity) {
   return {
     counts: Array.isArray(activity.options) ? activity.options.map(() => 0) : [],
     texts: [],
+    ratings: [],
+    cards: [],
     submissionsByDevice: {},
     resetCount: 0
   };
@@ -351,12 +393,16 @@ export function createPublicState(session) {
     currentActivityIndex: 0,
     submissionsLocked: false,
     revealedActivityIds: new Set(),
+    questions: [],
+    sessionClosed: false,
     activityStates: Object.fromEntries(
       session.activities.map((a) => [
         a.id,
         {
           counts: Array.isArray(a.options) ? a.options.map(() => 0) : [],
           texts: [],
+          ratings: [],
+          cards: [],
           resetCount: 0
         }
       ])
@@ -411,6 +457,8 @@ export function getActivityNumber(session, activityId) {
 export function getResponseTotal(activity, activityState) {
   if (!activity || !activityState) return 0;
   if (activity.type === "text") return activityState.texts.length;
+  if (activity.type === "rate") return activityState.ratings.length;
+  if (activity.type === "kanban") return activityState.cards.length;
   return activityState.counts.reduce((sum, c) => sum + c, 0);
 }
 
@@ -462,10 +510,11 @@ export function resetLocalSubmissionEntry(runtime, activityId, resetCount) {
 export function recordLocalSubmission(runtime, activityId, payload) {
   const store = readSubmissionStore(runtime.submissionStoreKey);
   const current = store[activityId] || createLocalSubmissionEntry();
+  const countIncrement = Number(payload.countIncrement) || 0;
   store[activityId] = {
     ...current,
-    count: current.count + (payload.countIncrement || 0),
-    lastSubmittedAt: Date.now(),
+    count: current.count + countIncrement,
+    lastSubmittedAt: countIncrement > 0 ? Date.now() : current.lastSubmittedAt,
     choiceIndex: typeof payload.choiceIndex === "number" ? payload.choiceIndex : current.choiceIndex
   };
   writeSubmissionStore(runtime.submissionStoreKey, store);
@@ -654,6 +703,8 @@ export function sanitizeActivityId(value, index) {
 export function humanizeType(type) {
   if (type === "quiz") return "Quiz";
   if (type === "text") return "Short text";
+  if (type === "rate") return "Rating";
+  if (type === "kanban") return "Kanban";
   return "Poll";
 }
 
