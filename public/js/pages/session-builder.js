@@ -19,8 +19,7 @@ import {
   downloadText,
   sanitizeActivityId,
   validateSession,
-  copyText,
-  flashButtonState
+  buildHostTokenStoreKey
 } from "../app.js";
 
 let state = {
@@ -54,7 +53,7 @@ export function initCreatePage() {
 
   if (!state.roomCode) {
     state.roomCode = generateRoomCode();
-    state.hostToken = randomToken(18);
+    state.hostToken = randomToken(32);
   }
   render();
 }
@@ -67,14 +66,14 @@ function render() {
     <div class="stack-lg">
 
       <!-- Session info -->
-      <div class="field">
+      <label class="field">
         <span>Session title</span>
         <input id="builder-title" type="text" placeholder="e.g. Week 3 Lecture Check-in" value="${escapeAttribute(state.title)}" />
-      </div>
-      <div class="field">
+      </label>
+      <label class="field">
         <span>Description (optional)</span>
         <input id="builder-desc" type="text" placeholder="e.g. Quick check on last week's reading" value="${escapeAttribute(state.description)}" />
-      </div>
+      </label>
 
       <!-- Room code display -->
       <div style="text-align: center; padding: var(--space-md) 0;">
@@ -149,7 +148,7 @@ function render() {
         <button id="export-json" class="button button-ghost" type="button">
           Export as JSON
         </button>
-        <label class="button button-ghost" style="cursor: pointer;">
+        <label class="button button-ghost" style="cursor: pointer;" aria-label="Import session JSON file">
           Import JSON
           <input id="import-json" type="file" accept=".json,application/json" class="visually-hidden" />
         </label>
@@ -184,7 +183,7 @@ function renderActivityCard(activity, index) {
               ? `<button type="button" class="button ${activity.correctIndex === oi ? 'button-secondary' : 'button-ghost'}" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-set-correct="${index}" data-correct-index="${oi}">${activity.correctIndex === oi ? '✓ Correct' : 'Set correct'}</button>`
               : ''
             }
-            <button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-option="${index}" data-option-index="${oi}">✕</button>
+            <button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-option="${index}" data-option-index="${oi}" aria-label="Remove option ${oi + 1}">✕</button>
           </div>
         `).join("")}
         <button type="button" class="button button-ghost" style="justify-self: start;" data-add-option="${index}">+ Add option</button>
@@ -195,10 +194,10 @@ function renderActivityCard(activity, index) {
   let textSettingsHtml = "";
   if (activity.type === "text") {
     textSettingsHtml = `
-      <div class="field">
+      <label class="field">
         <span>Max characters</span>
         <input type="number" min="1" max="280" value="${activity.maxLength || 180}" data-activity-maxlen="${index}" />
-      </div>
+      </label>
     `;
   }
 
@@ -228,7 +227,7 @@ function renderActivityCard(activity, index) {
         ${(activity.columns || []).map((column, columnIndex) => `
           <div class="builder-option-row">
             <input type="text" value="${escapeAttribute(column.title)}" data-column-title="${index}" data-column-index="${columnIndex}" placeholder="Column ${columnIndex + 1}" />
-            <button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-column="${index}" data-column-remove-index="${columnIndex}">✕</button>
+            <button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-column="${index}" data-column-remove-index="${columnIndex}" aria-label="Remove column ${columnIndex + 1}">✕</button>
           </div>
         `).join("")}
         <button type="button" class="button button-ghost" style="justify-self: start;" data-add-column="${index}">+ Add column</button>
@@ -241,15 +240,15 @@ function renderActivityCard(activity, index) {
       <div class="builder-activity-header">
         <h3><span class="badge badge-accent">${typeLabel}</span> Activity ${index + 1}</h3>
         <div class="builder-activity-actions">
-          <button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-up="${index}" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-down="${index}" ${index === total - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="button button-danger" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-remove-activity="${index}">Remove</button>
+          <button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-up="${index}" aria-label="Move activity ${index + 1} up" ${index === 0 ? 'disabled' : ''}>↑</button>
+          <button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-down="${index}" aria-label="Move activity ${index + 1} down" ${index === total - 1 ? 'disabled' : ''}>↓</button>
+          <button type="button" class="button button-danger" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-remove-activity="${index}" aria-label="Remove activity ${index + 1}">Remove</button>
         </div>
       </div>
-      <div class="field">
+      <label class="field">
         <span>Question</span>
         <input type="text" value="${escapeAttribute(activity.question)}" data-activity-question="${index}" placeholder="Enter your question" />
-      </div>
+      </label>
       ${optionsHtml}
       ${textSettingsHtml}
       ${rateSettingsHtml}
@@ -543,11 +542,11 @@ function startSession() {
   }
 
   saveSessionToStorage(state.roomCode, validation.session);
+  window.localStorage.setItem(buildHostTokenStoreKey(state.roomCode), state.hostToken);
   window.localStorage.removeItem("seminarsmack:draft-session");
 
   const url = buildPageUrl("present", {
-    room: state.roomCode,
-    host: state.hostToken
+    room: state.roomCode
   });
   window.location.href = url;
 }

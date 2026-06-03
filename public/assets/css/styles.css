@@ -188,9 +188,10 @@ img { max-width: 100%; height: auto; }
   transform: translateY(0);
 }
 
-.button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
-  outline: 2px solid rgba(79, 70, 229, 0.4);
-  outline-offset: 2px;
+.button:focus-visible, .type-option:focus-visible, .star-button:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 3px;
 }
 
 .button-primary {
@@ -925,4 +926,13 @@ details > div {
   }
 
   .copy-row { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

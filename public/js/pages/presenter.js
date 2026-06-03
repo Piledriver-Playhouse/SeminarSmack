@@ -14,15 +14,16 @@ import {
   isActivityRevealed, getTextMaxLength, clampIndex, clampNumber,
   hashString, stableStringify, humanizeType, escapeHtml, escapeAttribute,
   renderMetricCard, renderEmptyState, setBanner, buildPageUrl,
-  signEvent, verifySignedEvent, verifyEventIfNeeded,
-  copyText, flashButtonState, downloadText, randomToken
+  signEvent, verifyEventIfNeeded,
+  copyText, downloadText,
+  buildHostTokenStoreKey
 } from "../app.js";
 
 export async function initPresenterPage() {
   const params = new URLSearchParams(window.location.search);
   const room = sanitizeSimpleToken(params.get("room"));
   const sessionParam = normalizeSessionName(params.get("session"));
-  const hostToken = sanitizeHostToken(params.get("host"));
+  const hostToken = resolveHostToken(room, params);
 
   const runtime = {
     page: "present", room, sessionParam, hostToken,
@@ -158,6 +159,24 @@ export async function initPresenterPage() {
   });
 }
 
+function resolveHostToken(room, params) {
+  const urlToken = sanitizeHostToken(params.get("host"));
+  const storageKey = buildHostTokenStoreKey(room);
+
+  // The host token is only an informal classroom control guard. It helps avoid
+  // casual presenter takeover, but it is not institutional authentication.
+  if (urlToken) {
+    if (room) window.localStorage.setItem(storageKey, urlToken);
+    params.delete("host");
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.search = params.toString();
+    window.history.replaceState({}, "", cleanUrl.toString());
+    return urlToken;
+  }
+
+  return sanitizeHostToken(window.localStorage.getItem(storageKey));
+}
+
 function attachSession(runtime, session, sourceLabel) {
   runtime.session = session;
   runtime.sessionHash = hashString(stableStringify(session));
@@ -265,7 +284,7 @@ function renderPresenter(runtime) {
         <div class="stack">
           <div class="copy-row">
             <input id="presenter-join-link" type="text" readonly value="${escapeAttribute(joinLink)}" />
-            <button class="button button-ghost" type="button" data-copy-target="presenter-join-link">Copy link</button>
+            <button class="button button-ghost" type="button" data-copy-target="presenter-join-link" aria-label="Copy student join link">Copy link</button>
           </div>
         </div>
       </div>

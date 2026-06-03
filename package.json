@@ -2,12 +2,14 @@
   "name": "seminarsmack",
   "version": "1.0.0",
   "description": "SeminarSmack is a free, open-source classroom interaction tool.",
-  "main": "index.js",
+  "type": "module",
   "directories": {
     "doc": "public"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npm run docs",
+    "lint": "node --check public/js/app.js && node --check public/js/supabase.js && node --check public/js/pages/landing.js && node --check public/js/pages/session-builder.js && node --check public/js/pages/presenter.js && node --check public/js/pages/participant.js",
+    "test": "node --test",
     "docs": "jsdoc -c jsdoc.json"
   },
   "repository": {
@@ -16,8 +18,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/bitboyb/SeminarSmack/issues"
   },

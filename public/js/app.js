@@ -78,6 +78,7 @@ export const COOLDOWN_MS = 25000;
 export const PRESENTER_HEARTBEAT_MS = 5000;
 export const SNAPSHOT_DEBOUNCE_MS = 180;
 export const DEVICE_STORAGE_KEY = "seminarsmack:device-id";
+export const HOST_TOKEN_STORAGE_PREFIX = "seminarsmack:host-token:";
 export const SESSION_STORAGE_PREFIX = "seminarsmack:session:";
 export const SUPPORTED_ACTIVITY_TYPES = new Set(["poll", "text", "quiz", "rate", "kanban"]);
 export const SUBMISSION_LIMITS = { poll: 1, quiz: 1, text: 2, rate: 1, kanban: 3 };
@@ -149,17 +150,27 @@ export function generateRoomCode() {
 }
 
 /**
- * Generates a random alphanumeric token of a specified length.
+ * Generates a random alphanumeric token with Web Crypto.
  *
- * @param {number} [length=10] - The desired length of the token.
- * @returns {string} A random base-36 string.
+ * @param {number} [length=32] - The desired length of the token.
+ * @returns {string} A random URL-safe token.
  */
-export function randomToken(length = 10) {
-  const bytes = new Uint8Array(length);
-  window.crypto.getRandomValues(bytes);
-  return [...bytes]
-    .map((b) => "abcdefghijklmnopqrstuvwxyz0123456789"[b % 36])
-    .join("");
+export function randomToken(length = 32) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const cryptoApi = window.crypto || globalThis.crypto;
+  const token = [];
+
+  while (token.length < length) {
+    const bytes = new Uint8Array(length);
+    cryptoApi.getRandomValues(bytes);
+    bytes.forEach((byte) => {
+      if (token.length < length && byte < 248) {
+        token.push(alphabet[byte % alphabet.length]);
+      }
+    });
+  }
+
+  return token.join("");
 }
 
 // ── localStorage session store ───────────────────────────────────
@@ -533,6 +544,10 @@ function writeSubmissionStore(key, value) {
 
 export function buildSubmissionStoreKey(room, sessionHash) {
   return `seminarsmack:submissions:${room || "room"}:${sessionHash || "session"}`;
+}
+
+export function buildHostTokenStoreKey(room) {
+  return HOST_TOKEN_STORAGE_PREFIX + sanitizeSimpleToken(room || "room");
 }
 
 // ── Signing / verification ───────────────────────────────────────

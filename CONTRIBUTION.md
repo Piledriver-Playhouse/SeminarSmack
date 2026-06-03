@@ -97,10 +97,13 @@ New activity types should stay minimal and should reuse the existing activity/st
 
 ## Testing expectations
 
-There is not currently a full automated test suite in this repo.
+There is a small automated test suite for shared validation and token helpers, but not a full browser or accessibility suite.
 
 For now, contributions should include:
 
+- `npm run lint`
+- `npm test`
+- `npm run build` when documentation output may change
 - A short manual testing pass
 - README updates when behaviour changes
 - Sample JSON updates when new activity formats are added
@@ -120,6 +123,18 @@ Useful manual checks:
 - Keep comments concise and only where they help.
 - Match the existing naming and file organization.
 - Favor ASCII unless a file already uses other characters intentionally.
+- Do not commit `node_modules/`, local config files, coverage, caches, or generated dependency folders.
+
+## AI-assisted maintenance
+
+This repository is also used as an example of agentic coding. If you use an AI coding assistant:
+
+- Keep changes small and targeted.
+- Run `npm run lint`, `npm test`, and `npm run build` before committing.
+- Do not commit generated dependency folders or local environment/config files.
+- Document any data-flow changes in `README.md`.
+- Update `README.md` when changing Supabase, session, token, or auth-like behaviour.
+- Do not add new external services without documenting what they do, what data passes through them, and why they are needed.
 
 ## Pull requests
 

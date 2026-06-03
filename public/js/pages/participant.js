@@ -12,7 +12,7 @@ import {
   getConfigStatus, openRoomChannel, sendBroadcast, closeRoomChannel,
   COOLDOWN_MS, SUBMISSION_LIMITS,
   loadSessionFromFile, validateSession,
-  sanitizeSimpleToken, sanitizeHostToken, normalizeSessionName,
+  sanitizeSimpleToken, normalizeSessionName,
   getOrCreateDeviceId, createPublicState,
   getCurrentActivity, getActivityById, getActivityNumber, getResponseTotal,
   isActivityRevealed, getTextMaxLength, clampIndex,
@@ -27,10 +27,10 @@ export async function initJoinPage() {
   const params = new URLSearchParams(window.location.search);
   const room = sanitizeSimpleToken(params.get("room"));
   const sessionParam = normalizeSessionName(params.get("session"));
-  const hostToken = sanitizeHostToken(params.get("host"));
+  removeHostTokenFromUrl(params);
 
   const runtime = {
-    page: "join", room, sessionParam, hostToken,
+    page: "join", room, sessionParam, hostToken: "",
     deviceId: getOrCreateDeviceId(),
     channel: null, client: null,
     session: null, sessionHash: "",
@@ -200,6 +200,15 @@ export async function initJoinPage() {
   });
 }
 
+function removeHostTokenFromUrl(params) {
+  if (!params.has("host") && !window.location.hash.includes("host=")) return;
+  params.delete("host");
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.search = params.toString();
+  cleanUrl.hash = "";
+  window.history.replaceState({}, "", cleanUrl.toString());
+}
+
 // ── Snapshot application ───────────────────────────────────────
 
 function applySnapshot(runtime, payload) {
@@ -357,7 +366,7 @@ function renderActivityUI(runtime, activity, actState) {
             ${Array.from({ length: activity.maxRating || 5 }, (_, i) => {
               const value = i + 1;
               const active = value <= selectedRating;
-              return `<button class="star-button ${active ? 'is-active' : ''}" type="button" data-rating-value="${value}" aria-pressed="${active ? 'true' : 'false'}" ${gate.canSubmit ? '' : 'disabled'}>${active ? '★' : '☆'}<span class="visually-hidden">${value} star${value === 1 ? '' : 's'}</span></button>`;
+              return `<button class="star-button ${active ? 'is-active' : ''}" type="button" data-rating-value="${value}" role="radio" aria-checked="${selectedRating === value ? 'true' : 'false'}" aria-label="${value} star${value === 1 ? '' : 's'}" ${gate.canSubmit ? '' : 'disabled'}>${active ? '★' : '☆'}</button>`;
             }).join("")}
           </div>
           ${activity.comment ? `<label class="field"><span>Comment (optional)</span><textarea id="rating-comment-input" maxlength="280" placeholder="Add a short comment…" ${gate.canSubmit ? '' : 'disabled'}>${escapeHtml(runtime.ratingCommentDraft)}</textarea></label>` : ""}

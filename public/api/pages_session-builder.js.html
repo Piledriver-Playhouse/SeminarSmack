@@ -29,7 +29,7 @@
             <pre class="prettyprint source linenums"><code>/**
  * session-builder.js — Browser-based session creation for SeminarSmack.
  *
- * Teachers fill in a title, add activities (poll / quiz / text), and
+ * Teachers fill in a title, add activities (poll / quiz / text / rate / kanban), and
  * click "Start session". The session is saved to localStorage and the
  * browser redirects to the presenter page.
  *
@@ -47,8 +47,7 @@ import {
   downloadText,
   sanitizeActivityId,
   validateSession,
-  copyText,
-  flashButtonState
+  buildHostTokenStoreKey
 } from "../app.js";
 
 let state = {
@@ -82,7 +81,7 @@ export function initCreatePage() {
 
   if (!state.roomCode) {
     state.roomCode = generateRoomCode();
-    state.hostToken = randomToken(18);
+    state.hostToken = randomToken(32);
   }
   render();
 }
@@ -95,14 +94,14 @@ function render() {
     &lt;div class="stack-lg">
 
       &lt;!-- Session info -->
-      &lt;div class="field">
+      &lt;label class="field">
         &lt;span>Session title&lt;/span>
         &lt;input id="builder-title" type="text" placeholder="e.g. Week 3 Lecture Check-in" value="${escapeAttribute(state.title)}" />
-      &lt;/div>
-      &lt;div class="field">
+      &lt;/label>
+      &lt;label class="field">
         &lt;span>Description (optional)&lt;/span>
         &lt;input id="builder-desc" type="text" placeholder="e.g. Quick check on last week's reading" value="${escapeAttribute(state.description)}" />
-      &lt;/div>
+      &lt;/label>
 
       &lt;!-- Room code display -->
       &lt;div style="text-align: center; padding: var(--space-md) 0;">
@@ -117,7 +116,7 @@ function render() {
         &lt;p class="section-kicker">Activities (${state.activities.length})&lt;/p>
         &lt;div id="activities-list" class="stack-lg">
           ${state.activities.length === 0
-            ? `&lt;div class="empty-state">&lt;p class="body-copy">No activities yet. Add a poll, quiz, or text question below.&lt;/p>&lt;/div>`
+            ? `&lt;div class="empty-state">&lt;p class="body-copy">No activities yet. Add a poll, quiz, text, rating, or kanban activity below.&lt;/p>&lt;/div>`
             : state.activities.map((a, i) => renderActivityCard(a, i)).join("")
           }
         &lt;/div>
@@ -132,22 +131,36 @@ function render() {
           &lt;button class="type-option" type="button" data-add-type="poll">
             &lt;div class="type-icon">📊&lt;/div>
             &lt;div class="type-option-info">
-              &lt;strong>Poll&lt;/strong>
+              &lt;span class="type-name">Poll&lt;/span>
               &lt;span>Multiple choice, no correct answer&lt;/span>
             &lt;/div>
           &lt;/button>
           &lt;button class="type-option" type="button" data-add-type="quiz">
             &lt;div class="type-icon">🧠&lt;/div>
             &lt;div class="type-option-info">
-              &lt;strong>Quiz&lt;/strong>
+              &lt;span class="type-name">Quiz&lt;/span>
               &lt;span>Multiple choice with a correct answer&lt;/span>
             &lt;/div>
           &lt;/button>
           &lt;button class="type-option" type="button" data-add-type="text">
             &lt;div class="type-icon">💬&lt;/div>
             &lt;div class="type-option-info">
-              &lt;strong>Short text&lt;/strong>
+              &lt;span class="type-name">Short text&lt;/span>
               &lt;span>Open-ended short response&lt;/span>
+            &lt;/div>
+          &lt;/button>
+          &lt;button class="type-option" type="button" data-add-type="rate">
+            &lt;div class="type-icon">⭐&lt;/div>
+            &lt;div class="type-option-info">
+              &lt;span class="type-name">Rating&lt;/span>
+              &lt;span>1-5 stars with optional comment&lt;/span>
+            &lt;/div>
+          &lt;/button>
+          &lt;button class="type-option" type="button" data-add-type="kanban">
+            &lt;div class="type-icon">🗂️&lt;/div>
+            &lt;div class="type-option-info">
+              &lt;span class="type-name">Kanban&lt;/span>
+              &lt;span>Collect cards into configured columns&lt;/span>
             &lt;/div>
           &lt;/button>
         &lt;/div>
@@ -163,7 +176,7 @@ function render() {
         &lt;button id="export-json" class="button button-ghost" type="button">
           Export as JSON
         &lt;/button>
-        &lt;label class="button button-ghost" style="cursor: pointer;">
+        &lt;label class="button button-ghost" style="cursor: pointer;" aria-label="Import session JSON file">
           Import JSON
           &lt;input id="import-json" type="file" accept=".json,application/json" class="visually-hidden" />
         &lt;/label>
@@ -176,7 +189,15 @@ function render() {
 }
 
 function renderActivityCard(activity, index) {
-  const typeLabel = activity.type === "quiz" ? "Quiz" : activity.type === "text" ? "Short text" : "Poll";
+  const typeLabel = activity.type === "quiz"
+    ? "Quiz"
+    : activity.type === "text"
+      ? "Short text"
+      : activity.type === "rate"
+        ? "Rating"
+        : activity.type === "kanban"
+          ? "Kanban"
+          : "Poll";
   const total = state.activities.length;
 
   let optionsHtml = "";
@@ -190,7 +211,7 @@ function renderActivityCard(activity, index) {
               ? `&lt;button type="button" class="button ${activity.correctIndex === oi ? 'button-secondary' : 'button-ghost'}" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-set-correct="${index}" data-correct-index="${oi}">${activity.correctIndex === oi ? '✓ Correct' : 'Set correct'}&lt;/button>`
               : ''
             }
-            &lt;button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-option="${index}" data-option-index="${oi}">✕&lt;/button>
+            &lt;button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-option="${index}" data-option-index="${oi}" aria-label="Remove option ${oi + 1}">✕&lt;/button>
           &lt;/div>
         `).join("")}
         &lt;button type="button" class="button button-ghost" style="justify-self: start;" data-add-option="${index}">+ Add option&lt;/button>
@@ -201,9 +222,43 @@ function renderActivityCard(activity, index) {
   let textSettingsHtml = "";
   if (activity.type === "text") {
     textSettingsHtml = `
-      &lt;div class="field">
+      &lt;label class="field">
         &lt;span>Max characters&lt;/span>
         &lt;input type="number" min="1" max="280" value="${activity.maxLength || 180}" data-activity-maxlen="${index}" />
+      &lt;/label>
+    `;
+  }
+
+  let rateSettingsHtml = "";
+  if (activity.type === "rate") {
+    rateSettingsHtml = `
+      &lt;div class="field-grid">
+        &lt;label class="field">
+          &lt;span>Max rating&lt;/span>
+          &lt;input type="number" min="1" max="10" value="${activity.maxRating || 5}" data-activity-maxrating="${index}" />
+        &lt;/label>
+        &lt;label class="field">
+          &lt;span>Allow comment&lt;/span>
+          &lt;select data-activity-comment="${index}">
+            &lt;option value="true" ${activity.comment ? "selected" : ""}>Yes&lt;/option>
+            &lt;option value="false" ${activity.comment ? "" : "selected"}>No&lt;/option>
+          &lt;/select>
+        &lt;/label>
+      &lt;/div>
+    `;
+  }
+
+  let kanbanSettingsHtml = "";
+  if (activity.type === "kanban") {
+    kanbanSettingsHtml = `
+      &lt;div class="stack">
+        ${(activity.columns || []).map((column, columnIndex) => `
+          &lt;div class="builder-option-row">
+            &lt;input type="text" value="${escapeAttribute(column.title)}" data-column-title="${index}" data-column-index="${columnIndex}" placeholder="Column ${columnIndex + 1}" />
+            &lt;button type="button" class="button button-danger" style="min-height:2.5rem; padding:0.5rem 0.7rem; font-size:0.8rem;" data-remove-column="${index}" data-column-remove-index="${columnIndex}" aria-label="Remove column ${columnIndex + 1}">✕&lt;/button>
+          &lt;/div>
+        `).join("")}
+        &lt;button type="button" class="button button-ghost" style="justify-self: start;" data-add-column="${index}">+ Add column&lt;/button>
       &lt;/div>
     `;
   }
@@ -213,17 +268,19 @@ function renderActivityCard(activity, index) {
       &lt;div class="builder-activity-header">
         &lt;h3>&lt;span class="badge badge-accent">${typeLabel}&lt;/span> Activity ${index + 1}&lt;/h3>
         &lt;div class="builder-activity-actions">
-          &lt;button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-up="${index}" ${index === 0 ? 'disabled' : ''}>↑&lt;/button>
-          &lt;button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-down="${index}" ${index === total - 1 ? 'disabled' : ''}>↓&lt;/button>
-          &lt;button type="button" class="button button-danger" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-remove-activity="${index}">Remove&lt;/button>
+          &lt;button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-up="${index}" aria-label="Move activity ${index + 1} up" ${index === 0 ? 'disabled' : ''}>↑&lt;/button>
+          &lt;button type="button" class="button button-ghost" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-move-down="${index}" aria-label="Move activity ${index + 1} down" ${index === total - 1 ? 'disabled' : ''}>↓&lt;/button>
+          &lt;button type="button" class="button button-danger" style="min-height:2.2rem; padding:0.4rem 0.6rem; font-size:0.85rem;" data-remove-activity="${index}" aria-label="Remove activity ${index + 1}">Remove&lt;/button>
         &lt;/div>
       &lt;/div>
-      &lt;div class="field">
+      &lt;label class="field">
         &lt;span>Question&lt;/span>
         &lt;input type="text" value="${escapeAttribute(activity.question)}" data-activity-question="${index}" placeholder="Enter your question" />
-      &lt;/div>
+      &lt;/label>
       ${optionsHtml}
       ${textSettingsHtml}
+      ${rateSettingsHtml}
+      ${kanbanSettingsHtml}
     &lt;/div>
   `;
 }
@@ -352,6 +409,51 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-activity-maxrating]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const idx = Number(input.dataset.activityMaxrating);
+      state.activities[idx].maxRating = Number(input.value) || 5;
+      saveDraft();
+    });
+  });
+
+  document.querySelectorAll("[data-activity-comment]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const idx = Number(select.dataset.activityComment);
+      state.activities[idx].comment = select.value === "true";
+      saveDraft();
+    });
+  });
+
+  document.querySelectorAll("[data-column-title]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const idx = Number(input.dataset.columnTitle);
+      const columnIndex = Number(input.dataset.columnIndex);
+      state.activities[idx].columns[columnIndex].title = input.value;
+      saveDraft();
+    });
+  });
+
+  document.querySelectorAll("[data-add-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const idx = Number(button.dataset.addColumn);
+      const columnCount = state.activities[idx].columns.length + 1;
+      state.activities[idx].columns.push({ id: `column-${columnCount}`, title: "" });
+      saveDraft();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-remove-column]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const idx = Number(button.dataset.removeColumn);
+      const columnIndex = Number(button.dataset.columnRemoveIndex);
+      state.activities[idx].columns.splice(columnIndex, 1);
+      saveDraft();
+      render();
+    });
+  });
+
   // Start session
   document.getElementById("start-session")?.addEventListener("click", () => {
     startSession();
@@ -406,6 +508,19 @@ function addActivity(type) {
     activity.maxLength = 180;
   }
 
+  if (type === "rate") {
+    activity.maxRating = 5;
+    activity.comment = true;
+  }
+
+  if (type === "kanban") {
+    activity.columns = [
+      { id: "ideas", title: "Ideas" },
+      { id: "in-progress", title: "In Progress" },
+      { id: "done", title: "Done" }
+    ];
+  }
+
   state.activities.push(activity);
   saveDraft();
   render();
@@ -430,6 +545,16 @@ function buildSessionObject() {
       if (a.type === "text") {
         out.maxLength = a.maxLength || 180;
       }
+      if (a.type === "rate") {
+        out.maxRating = a.maxRating || 5;
+        out.comment = Boolean(a.comment);
+      }
+      if (a.type === "kanban") {
+        out.columns = (a.columns || []).map((column, columnIndex) => ({
+          id: sanitizeActivityId(column.id || `column-${columnIndex + 1}`, columnIndex),
+          title: String(column.title || "").trim()
+        })).filter((column) => column.title);
+      }
       return out;
     })
   };
@@ -445,11 +570,11 @@ function startSession() {
   }
 
   saveSessionToStorage(state.roomCode, validation.session);
+  window.localStorage.setItem(buildHostTokenStoreKey(state.roomCode), state.hostToken);
   window.localStorage.removeItem("seminarsmack:draft-session");
 
   const url = buildPageUrl("present", {
-    room: state.roomCode,
-    host: state.hostToken
+    room: state.roomCode
   });
   window.location.href = url;
 }
@@ -469,7 +594,7 @@ function startSession() {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Mon May 04 2026 00:44:58 GMT+0100 (British Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Jun 03 2026 19:08:06 GMT+0100 (British Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>

@@ -2,7 +2,7 @@
   <img src="https://github.com/bitboyb/SeminarSmack/blob/main/public/assets/img/logo.png?raw=true" alt="SeminarSmack Logo" width="120" style="border-radius: 20%; margin-bottom: 20px;" />
   <h1>SeminarSmack</h1>
   <p><strong>A free, open-source classroom interaction tool.</strong></p>
-  
+
   <a href="https://bitboyb.github.io/SeminarSmack/">
     <img src="https://img.shields.io/badge/Live_Demo-Try_it_now!-ee9ad5?style=for-the-badge" alt="Live Demo" />
   </a>
@@ -16,43 +16,121 @@
     <img src="https://img.shields.io/badge/License-MIT-gray?style=for-the-badge" alt="License MIT" />
   </a>
 
-  <p>Create live polls, quizzes, short text questions, ratings, and kanban boards — students join with a QR code or typed room code from any device.<br/>No login required. No install. Free to use.</p>
+  <p>Create live polls, quizzes, short text questions, ratings, and kanban boards. Students join with a QR code or typed room code from any device.<br/>No login required. No install. Free to use.</p>
 
   <br />
-  <img src="https://github.com/bitboyb/SeminarSmack/raw/main/public/assets/img/seminar-smack-preview.gif" width="80%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+  <img src="https://github.com/bitboyb/SeminarSmack/raw/main/public/assets/img/seminar-smack-preview.gif" alt="SeminarSmack preview" width="80%" style="border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);" />
 </div>
 
 ---
 
-## Quick start
+## Quick Start
 
-1. **Open the site** — visit the [live SeminarSmack app](https://bitboyb.github.io/SeminarSmack/).
-2. **Create a session** — click "Create a session", add your questions.
-3. **Start hosting** — click "Start session". A room code and QR code are generated automatically.
-4. **Share with students** — show the QR code on screen or share the join link.
-5. **Present live** — step through activities, see answers update in realtime, reveal correct answers when ready.
+1. Open the [live SeminarSmack app](https://bitboyb.github.io/SeminarSmack/).
+2. Click **Create a session** and add your questions.
+3. Click **Start session**. A room code and QR code are generated automatically.
+4. Share the QR code, join link, or room code with students.
+5. Present live, step through activities, see responses update, and export responses when finished.
 
-## What it does
+## What It Does
 
-- **Live polls** — multiple-choice questions with realtime results
-- **Quizzes** — mark a correct answer and reveal it when ready
-- **Short text responses** — collect open-ended answers from students
-- **Ratings** — collect 1-5 star feedback with optional comments
-- **Kanban boards** — let participants add cards into presenter-defined columns
-- **Anonymous questions** — participants can send live questions to the presenter
-- **QR code join** — students scan and answer from their phones
-- **Session export/import** — save your session as JSON and export collected responses when the session closes
+- Live polls with realtime results.
+- Quizzes with an optional correct answer reveal.
+- Short text responses.
+- Ratings with optional comments.
+- Simple kanban boards with presenter-defined columns.
+- Anonymous questions from participants.
+- QR code and room-code joining.
+- Client-side session import/export and response export.
 
-## How it works
+## How It Works
 
-- Sessions created in the browser are stored in your browser's `localStorage`.
-- The presenter page is the **source of truth** — it broadcasts state to all connected students via Supabase Realtime Broadcast.
-- Students can join with a QR code, a direct link, or a manually typed room code on `join.html`.
-- The **QR code** on the presenter page is generated locally in the browser using a vendored copy of [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator). No QR API, CDN, or backend service is used.
-- There is **no database** and **no backend server**. Everything runs in the browser.
-- Sessions are temporary and local to the browser that created them, unless you export them as JSON.
+- Sessions created in the browser are stored in the educator browser's `localStorage`.
+- The presenter page is the source of truth during a live session.
+- Live updates are sent through Supabase Realtime Broadcast when Supabase is configured.
+- The app does not run a custom backend server, but it does depend on Supabase's third-party realtime infrastructure for live multi-device sessions.
+- The QR code is generated locally in the browser using a vendored copy of [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator).
+- SeminarSmack does not require student accounts or a custom database table. Supabase Realtime still processes realtime messages while a session is live.
 
-## Example activity JSON
+## Data Flow
+
+Users enter session titles, prompts, answer options, ratings, short text, kanban cards, optional URLs, and anonymous questions. Students are not required by the app to identify themselves, but educators should avoid prompts that ask for unnecessary personal data.
+
+During a live session, presenter state and participant submissions are broadcast over a Supabase Realtime channel for the room code. The presenter browser collects the live state and can export responses as a JSON file. Session drafts and lightweight per-device submission limits are stored in browser `localStorage`.
+
+By default, SeminarSmack is designed for temporary classroom interaction rather than long-term records. Exported JSON files are controlled by whoever downloads and stores them. Before using the tool with students, educators or institutions should check local policy, approved services, data-retention expectations, and whether the configured Supabase project is appropriate for student-facing activity.
+
+## Clean Setup
+
+```bash
+git clone https://github.com/bitboyb/SeminarSmack.git
+cd SeminarSmack
+npm install
+cp public/js/config.template.js public/js/config.js
+```
+
+Edit `public/js/config.js`:
+
+```js
+window.APP_CONFIG = {
+  SUPABASE_URL: "https://your-project.supabase.co",
+  SUPABASE_PUBLISHABLE_KEY: "your-publishable-anon-key"
+};
+```
+
+Run locally with any static server:
+
+```bash
+npx serve public
+```
+
+Build generated API docs:
+
+```bash
+npm run build
+```
+
+Run checks:
+
+```bash
+npm run lint
+npm test
+```
+
+## What You Need Before Deploying
+
+- A Supabase project URL.
+- A Supabase publishable anon key.
+- Supabase Realtime enabled for the project.
+
+Never use a Supabase `service_role` key in this browser app.
+
+## GitHub Pages Deployment
+
+This repository includes `.github/workflows/pages.yml`. The workflow:
+
+1. checks out the repository;
+2. validates `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`;
+3. generates `public/js/config.js` during deployment;
+4. runs `npm ci`;
+5. runs `npm run docs`;
+6. uploads `public/` to GitHub Pages.
+
+Required repository settings:
+
+- Settings -> Pages -> Source -> **GitHub Actions**.
+- Add repository variables or secrets named `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`.
+- Push to `main` or run the workflow manually.
+
+Common failure points:
+
+- Pages is still set to deploy from a branch instead of GitHub Actions.
+- Supabase variables or secrets are missing.
+- A `service_role` key was used instead of the publishable anon key.
+- Supabase Realtime is unavailable or blocked by the local network.
+- `public/js/config.js` was expected to be committed; it is generated in deployment and ignored for local use.
+
+## Example Activity JSON
 
 ### Rating
 
@@ -83,138 +161,64 @@
 }
 ```
 
-## Live questions and exports
-
-- Participants can send anonymous questions from the join page at any point during a live session.
-- Presenters see incoming questions live in a dedicated panel and hear a short notification sound after interacting with the page.
-- When a presenter closes a session, they can export all collected responses as a client-side JSON download with ratings, comments, kanban cards, and anonymous questions.
-
-## Manual testing checklist
-
-- Join flow: type a valid room code, press `Enter`, click `Join session`, and confirm empty or inactive room codes show a clear warning.
-- Rating: submit a valid star rating, confirm invalid values are rejected client-side, and verify the presenter average/comments update live.
-- Kanban: add cards to each configured column, verify optional URLs render as previews or links, and confirm the presenter board updates live.
-- Questions: submit an anonymous question, confirm it appears in the presenter panel, and verify the notification only sounds for newly received questions.
-- Export: close the session, export responses, and confirm the JSON includes activities, responses, ratings, kanban cards, and anonymous questions.
-
-## Ethos
-
-SeminarSmack is built on the belief that simple educational tools should be accessible to everyone.
-
-Many classroom interaction tools are useful because they make teaching more engaging: they help students respond, vote, reflect, and take part. But tools like this are often placed behind subscriptions, usage limits, account systems, or institutional licences. In practice, that can leave individual educators paying out of pocket just to make their sessions more interactive.
-
-SeminarSmack takes a different approach.
-
-The app is intentionally small, static, and low-cost to run. It does not need a complex backend, paid hosting, a database, or expensive infrastructure. Because the technical costs are minimal, the tool should remain free to use, easy to self-host, and open to adaptation.
-
-This project is not against paid educational software. Complex platforms need funding, support, maintenance, and long-term sustainability. But when a tool can be delivered simply, cheaply, and openly, it should not create unnecessary barriers for teachers or learners.
-
-SeminarSmack aims to be:
-
-* **Free for educators and students** — no paywall for basic classroom participation.
-* **Open source** — so the tool can be inspected, adapted, improved, and self-hosted.
-* **Low infrastructure** — designed to avoid unnecessary hosting costs.
-* **Privacy-conscious** — no login, no database by default, and no student accounts required.
-* **Practical** — focused on the classroom features teachers actually need during live sessions.
-* **Reusable** — sessions can be exported, imported, shared, and adapted.
-
-The goal is simple: make it easier for educators to create active, engaging lessons without adding another cost, account, or platform dependency.
-
-## Self-hosting / development
-
-### 1. Fork the repo
-
-Fork this repository to your own GitHub account.
-
-### 2. Create a Supabase project
-
-Create a free Supabase project and collect:
-
-- Project URL
-- Publishable key (anon key)
-
-Do **not** use a `service_role` key.
-
-### 3. Add GitHub repository variables
-
-In your fork, add these repository variables (or secrets):
-
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
-
-The GitHub Actions workflow generates `public/js/config.js` during deployment.
-
-### 4. Enable GitHub Pages
-
-In your fork: Settings → Pages → Source → GitHub Actions.
-
-### 5. Push to main
-
-Push to `main` or trigger the workflow manually. The site deploys from `public/`.
-
-### Local preview
-
-```bash
-cp public/js/config.template.js public/js/config.js
-```
-
-Edit `public/js/config.js` with your Supabase credentials, then serve `public/` locally.
-
-## Repository layout
+## Repository Layout
 
 ```text
 /public
-  index.html            — Landing page
-  create.html           — Session builder
-  join.html             — Student join page
-  present.html          — Presenter controls
-  API.md                — API documentation homepage
+  index.html             Landing page
+  create.html            Session builder
+  join.html              Student join page
+  present.html           Presenter controls
+  API.md                 API documentation homepage
   assets/
-    css/styles.css      — Design system
-    img/logo.png        — Logo
+    css/styles.css       Design system
+    img/logo.png         Logo
   js/
-    app.js              — Shared utilities + router
-    supabase.js         — Supabase client
-    config.template.js  — Config placeholder
+    app.js               Shared utilities, validation, state helpers, router
+    supabase.js          Supabase Realtime wrapper
+    config.template.js   Local config template
     pages/
-      landing.js        — Landing page module
-      session-builder.js— Create page logic
-      presenter.js      — Presenter logic
-      participant.js    — Student join logic
+      landing.js
+      session-builder.js
+      presenter.js
+      participant.js
     vendor/
-      qrcode.min.js     — QR code generator (vendored, no CDN)
+      qrcode.min.js      QR code generator
   sessions/
     sample-session.json
     example-session.json
 
 /.github/workflows/pages.yml
+CONTRIBUTION.md
 README.md
 LICENSE
 ```
 
-## URL reference
+## URL Reference
 
-### New flow (recommended)
+Recommended flow:
 
-```
-create.html                                    — Build a session
-present.html?room=SPARK-4821&host=<token>      — Host the session
-join.html?room=SPARK-4821                      — Student join
-```
-
-### Legacy flow (still supported)
-
-```
-present.html?room=abc&session=sample-session&host=token
-join.html?room=abc&session=sample-session
+```text
+create.html                       Build a session
+present.html?room=spark-4821      Host the session
+join.html?room=spark-4821         Student join
 ```
 
-## Security notes
+Legacy presenter links with `host=<token>` are still accepted. The presenter page imports the token into `localStorage` and removes it from the visible URL.
 
-- Uses the Supabase **publishable key** only — visible in the browser, which is expected.
+## Security Notes
+
+- Uses the Supabase publishable anon key only, which is expected to be visible in browser code.
 - Never use a `service_role` key.
-- The host token is a lightweight browser-side control guard, **not** a full authentication system.
-- This is a lightweight teaching tool, not a secure exam platform.
+- The host token is a lightweight browser-side control guard, not a full authentication system.
+- If a student obtains the host token, they may be able to affect presenter-controlled session state.
+- Room codes and local submission limits are suitable for informal classroom use, not high-stakes assessment.
+
+## Ethos
+
+SeminarSmack is built on the belief that simple educational tools should be accessible to everyone. It is intentionally small, static, low-cost to run, and open to adaptation.
+
+The goal is simple: make it easier for educators to create active, engaging lessons without adding another cost, account, or platform dependency.
 
 ## License
 

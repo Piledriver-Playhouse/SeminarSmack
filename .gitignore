@@ -1,4 +1,37 @@
-docs/config.js
+# Dependencies
+node_modules/
+
+# Build and generated output
+dist/
+build/
+coverage/
+public/js/config.js
+public/config.js
+
+# Environment and local configuration
+.env
+.env.local
+.env.*.local
+
+# Logs and temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+.vite/
+.eslintcache
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local agent metadata
 .codex
 .codex/
-.DS_Store
