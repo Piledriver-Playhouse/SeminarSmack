@@ -16,7 +16,7 @@ import {
   renderMetricCard, renderEmptyState, setBanner, buildPageUrl,
   signEvent, verifyEventIfNeeded,
   copyText, downloadText,
-  buildHostTokenStoreKey
+  buildHostTokenStoreKey, randomToken
 } from "../app.js";
 
 export async function initPresenterPage() {
@@ -174,7 +174,18 @@ function resolveHostToken(room, params) {
     return urlToken;
   }
 
-  return sanitizeHostToken(window.localStorage.getItem(storageKey));
+  const stored = sanitizeHostToken(window.localStorage.getItem(storageKey));
+  if (stored) return stored;
+
+  // Auto-generate a host token when opening a presenter page directly
+  // (e.g. the "Try a demo" link) without going through the session builder.
+  if (room) {
+    const generated = randomToken(32);
+    window.localStorage.setItem(storageKey, generated);
+    return generated;
+  }
+
+  return "";
 }
 
 function attachSession(runtime, session, sourceLabel) {
