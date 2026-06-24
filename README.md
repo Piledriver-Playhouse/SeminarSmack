@@ -3,13 +3,13 @@
   <h1>SeminarSmack</h1>
   <p><strong>A free, open-source classroom interaction tool.</strong></p>
 
-  <a href="https://bitboyb.github.io/SeminarSmack/">
+  <a href="https://seminar-smack.com/">
     <img src="https://img.shields.io/badge/Live_Demo-Try_it_now!-ee9ad5?style=for-the-badge" alt="Live Demo" />
   </a>
   <a href="https://github.com/sponsors/bitboyb">
     <img src="https://img.shields.io/badge/Sponsor-GitHub-ea4aaa?style=for-the-badge&logo=github" alt="Sponsor on GitHub" />
   </a>
-  <a href="https://bitboyb.github.io/SeminarSmack/api/">
+  <a href="https://seminar-smack.com/api/">
     <img src="https://img.shields.io/badge/API_Docs-View_Reference-5fd9d7?style=for-the-badge" alt="API Docs" />
   </a>
   <a href="./LICENSE">
@@ -26,7 +26,7 @@
 
 ## Quick Start
 
-1. Open the [live SeminarSmack app](https://bitboyb.github.io/SeminarSmack/).
+1. Open the [live SeminarSmack app](https://seminar-smack.com/).
 2. Click **Create a session** and add your questions.
 3. Click **Start session**. A room code and QR code are generated automatically.
 4. Share the QR code, join link, or room code with students.
@@ -90,6 +90,9 @@ Build generated API docs:
 npm run build
 ```
 
+The API reference is generated from JSDoc into `public/api/`. On the live site,
+it is available at [seminar-smack.com/api/](https://seminar-smack.com/api/).
+
 Run checks:
 
 ```bash
@@ -114,7 +117,8 @@ This repository includes `.github/workflows/pages.yml`. The workflow:
 3. generates `public/js/config.js` during deployment;
 4. runs `npm ci`;
 5. runs `npm run docs`;
-6. uploads `public/` to GitHub Pages.
+6. uploads `public/` to GitHub Pages, including the generated `public/api/`
+   reference.
 
 Required repository settings:
 

@@ -22,7 +22,7 @@
   "bugs": {
     "url": "https://github.com/bitboyb/SeminarSmack/issues"
   },
-  "homepage": "https://github.com/bitboyb/SeminarSmack#readme",
+  "homepage": "https://seminar-smack.com/",
   "devDependencies": {
     "jsdoc": "^4.0.5"
   }
