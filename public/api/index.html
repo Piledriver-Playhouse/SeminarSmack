@@ -47,7 +47,70 @@
 <p>Welcome to the technical documentation for SeminarSmack.</p>
 <p>SeminarSmack is a static, zero-backend web application that uses Supabase Realtime Broadcast to synchronize state between a presenter and multiple participants.</p>
 <p>The canonical live API reference is available at https://seminar-smack.com/api/.</p>
-<p>Use the navigation menu on the right to explore the core modules, classes, and shared utilities that power the application.</p></article>
+<p>Use the navigation menu on the right to explore the core modules and shared utilities that power the application.</p>
+<h2>Module Map</h2>
+<ul>
+<li><code>app</code> is the shared core. It owns routing, session validation, activity normalization, presenter/public state factories, local submission tracking, signing helpers, rendering primitives, URL builders, sanitization, escaping, and small data helpers.</li>
+<li><code>supabase</code> wraps the Supabase browser client and exposes the realtime channel helpers used by the presenter and participant pages.</li>
+<li><code>sessionBuilder</code> powers <code>create.html</code>. It builds session JSON in the browser, saves drafts to <code>localStorage</code>, stores the host token, and redirects to the presenter page.</li>
+<li><code>presenter</code> powers <code>present.html</code>. It loads a session, maintains the authoritative presenter state, accepts participant submissions, signs control events, broadcasts state snapshots, and exports responses.</li>
+<li><code>participant</code> powers <code>join.html</code>. It connects to a room, applies presenter snapshots, enforces per-device submission limits, and sends participant submissions.</li>
+<li><code>landing</code> powers the homepage only.</li>
+</ul>
+<h2>Session Schema</h2>
+<p>A session is a plain JSON object with a <code>title</code>, optional <code>description</code>, and one or more <code>activities</code>.</p>
+<p>Each activity must include:</p>
+<ul>
+<li><code>id</code>: stable unique activity identifier.</li>
+<li><code>type</code>: one of <code>poll</code>, <code>quiz</code>, <code>text</code>, <code>rate</code>, or <code>kanban</code>.</li>
+<li><code>question</code> or <code>title</code>: the prompt shown to participants.</li>
+<li><code>prompt</code>: optional supporting text.</li>
+</ul>
+<p>Type-specific fields:</p>
+<ul>
+<li><code>poll</code>: <code>options</code>, with at least two non-empty strings.</li>
+<li><code>quiz</code>: <code>options</code>, with at least two non-empty strings, and optional <code>correctIndex</code>.</li>
+<li><code>text</code>: optional <code>maxLength</code>, clamped from 1 to 280.</li>
+<li><code>rate</code>: optional <code>maxRating</code>, clamped from 1 to 10, and optional <code>comment</code>.</li>
+<li><code>kanban</code>: <code>columns</code>, each with an <code>id</code> and <code>title</code>.</li>
+</ul>
+<p><code>validateSession()</code> and <code>normalizeActivity()</code> in the <code>app</code> module are the canonical schema implementation.</p>
+<h2>Realtime Protocol</h2>
+<p>SeminarSmack uses Supabase Realtime Broadcast channels named <code>room:&lt;room-code&gt;</code>.</p>
+<p>Presenter-owned control events are signed with the host token:</p>
+<ul>
+<li><code>activity_changed</code></li>
+<li><code>session_reset</code></li>
+<li><code>submissions_locked</code></li>
+<li><code>reveal_answer</code></li>
+<li><code>session_closed</code></li>
+<li><code>state_snapshot</code></li>
+</ul>
+<p>Participant events are sent to the presenter:</p>
+<ul>
+<li><code>vote_submitted</code></li>
+<li><code>quiz_submitted</code></li>
+<li><code>text_submitted</code></li>
+<li><code>rating_submitted</code></li>
+<li><code>kanban_card_submitted</code></li>
+<li><code>question_submitted</code></li>
+</ul>
+<p>The presenter is the source of truth. Participants can render legacy session files when a <code>session</code> query parameter is present, but live state is synchronized from signed presenter snapshots.</p>
+<h2>State Model</h2>
+<p>Presenter state stores the full live session, including response counts, text answers, ratings, kanban cards, anonymous questions, reveal state, lock state, reset counts, and session closure.</p>
+<p>Public participant state is derived from presenter snapshots. It excludes presenter-only submission tracking and host-token details, but includes enough information for participants to render current prompts, results, reset state, questions, and closed-session messages.</p>
+<h2>Storage Keys</h2>
+<p>Browser storage is intentionally lightweight:</p>
+<ul>
+<li><code>seminarsmack:session:&lt;room&gt;</code> stores locally authored sessions.</li>
+<li><code>seminarsmack:host-token:&lt;room&gt;</code> stores the presenter host token on the presenter device.</li>
+<li><code>seminarsmack:submissions:&lt;room&gt;:&lt;session-hash&gt;</code> stores per-device submission limits.</li>
+<li><code>seminarsmack:device-id</code> stores the participant device identifier.</li>
+<li><code>seminarsmack:draft-session</code> stores the session builder draft.</li>
+</ul>
+<p>These values are classroom convenience controls, not institutional authentication or durable assessment records.</p>
+<h2>Generated Reference</h2>
+<p>Run <code>npm run docs</code> or <code>npm run build</code> to regenerate this reference into <code>public/api/</code>. The GitHub Pages workflow runs the same command before publishing, so the live API reference reflects the JSDoc comments in <code>public/js/</code>.</p></article>
     </section>
 
 
@@ -64,7 +127,7 @@
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Jun 24 2026 10:04:38 GMT+0100 (British Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Jun 24 2026 10:13:02 GMT+0100 (British Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>

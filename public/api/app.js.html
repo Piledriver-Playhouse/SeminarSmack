@@ -524,10 +524,27 @@ export function getTextMaxLength(activity) {
 
 // ── Submission tracking (audience) ───────────────────────────────
 
+/**
+ * Creates a local submission tracking record for a participant device.
+ *
+ * @param {number} [resetCount=0] - Activity reset count this entry belongs to.
+ * @returns {{count: number, lastSubmittedAt: number, choiceIndex: number|null, resetCount: number}} Submission entry.
+ */
 export function createLocalSubmissionEntry(resetCount = 0) {
   return { count: 0, lastSubmittedAt: 0, choiceIndex: null, resetCount };
 }
 
+/**
+ * Reads the participant's local submission entry for an activity.
+ *
+ * If the presenter has reset the activity, the local entry is refreshed so the
+ * participant can submit again under the new reset count.
+ *
+ * @param {Object} runtime - Participant page runtime state.
+ * @param {string} activityId - Activity identifier.
+ * @param {number} resetCount - Current presenter reset count for the activity.
+ * @returns {{count: number, lastSubmittedAt: number, choiceIndex: number|null, resetCount: number}} Submission entry.
+ */
 export function getLocalSubmissionEntry(runtime, activityId, resetCount) {
   const store = readSubmissionStore(runtime.submissionStoreKey);
   const entry = store[activityId] || createLocalSubmissionEntry(resetCount);
@@ -540,12 +557,31 @@ export function getLocalSubmissionEntry(runtime, activityId, resetCount) {
   return entry;
 }
 
+/**
+ * Resets the participant's local submission entry for one activity.
+ *
+ * @param {Object} runtime - Participant page runtime state.
+ * @param {string} activityId - Activity identifier.
+ * @param {number} resetCount - Current presenter reset count.
+ */
 export function resetLocalSubmissionEntry(runtime, activityId, resetCount) {
   const store = readSubmissionStore(runtime.submissionStoreKey);
   store[activityId] = createLocalSubmissionEntry(resetCount);
   writeSubmissionStore(runtime.submissionStoreKey, store);
 }
 
+/**
+ * Records a local participant submission or selection update.
+ *
+ * `countIncrement` is used for actual submitted responses. `choiceIndex` can be
+ * updated independently for rating/poll UI state before final submission.
+ *
+ * @param {Object} runtime - Participant page runtime state.
+ * @param {string} activityId - Activity identifier.
+ * @param {Object} payload - Local submission update.
+ * @param {number} [payload.countIncrement] - Number of submitted responses to add.
+ * @param {number} [payload.choiceIndex] - Locally selected choice index.
+ */
 export function recordLocalSubmission(runtime, activityId, payload) {
   const store = readSubmissionStore(runtime.submissionStoreKey);
   const current = store[activityId] || createLocalSubmissionEntry();
@@ -570,10 +606,26 @@ function writeSubmissionStore(key, value) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+/**
+ * Builds the localStorage key for participant submission limits.
+ *
+ * The session hash scopes limits to the active session, so reusing a room code
+ * with different session content does not inherit old submission counts.
+ *
+ * @param {string} room - Room code.
+ * @param {string} sessionHash - Stable hash of the active session.
+ * @returns {string} localStorage key.
+ */
 export function buildSubmissionStoreKey(room, sessionHash) {
   return `seminarsmack:submissions:${room || "room"}:${sessionHash || "session"}`;
 }
 
+/**
+ * Builds the localStorage key for a room's presenter host token.
+ *
+ * @param {string} room - Room code.
+ * @returns {string} localStorage key.
+ */
 export function buildHostTokenStoreKey(room) {
   return HOST_TOKEN_STORAGE_PREFIX + sanitizeSimpleToken(room || "room");
 }
@@ -611,6 +663,17 @@ export async function verifySignedEvent(eventName, payload, secret) {
   return expected === signature;
 }
 
+/**
+ * Verifies a signed presenter event when the runtime has a host token.
+ *
+ * If no host token is present the event is accepted, which preserves local and
+ * legacy preview flows where signed presenter control is unavailable.
+ *
+ * @param {Object} runtime - Page runtime state.
+ * @param {string} eventName - Broadcast event name.
+ * @param {Object} payload - Event payload.
+ * @returns {Promise&lt;boolean>} Whether the event should be accepted.
+ */
 export async function verifyEventIfNeeded(runtime, eventName, payload) {
   if (!runtime.hostToken) return true;
   return verifySignedEvent(eventName, payload, runtime.hostToken);
@@ -645,6 +708,13 @@ export function renderMetricCard(label, value, note) {
   `;
 }
 
+/**
+ * Renders a standard empty-state block.
+ *
+ * @param {string} title - Empty-state title.
+ * @param {string} body - Empty-state body copy.
+ * @returns {string} HTML string.
+ */
 export function renderEmptyState(title, body) {
   return `
     &lt;div class="empty-state">
@@ -654,6 +724,13 @@ export function renderEmptyState(title, body) {
   `;
 }
 
+/**
+ * Updates a status banner element with a message and tone class.
+ *
+ * @param {HTMLElement|null} element - Banner element.
+ * @param {string} message - Banner text.
+ * @param {"info"|"success"|"warning"|"muted"} [tone="info"] - Visual tone suffix.
+ */
 export function setBanner(element, message, tone = "info") {
   if (!element) return;
   element.textContent = message || "";
@@ -663,6 +740,12 @@ export function setBanner(element, message, tone = "info") {
 
 // ── DOM helpers ──────────────────────────────────────────────────
 
+/**
+ * Copies text to the clipboard, with a textarea fallback for older browsers.
+ *
+ * @param {string} value - Text to copy.
+ * @returns {Promise&lt;void>}
+ */
 export async function copyText(value) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -679,12 +762,25 @@ export async function copyText(value) {
   helper.remove();
 }
 
+/**
+ * Temporarily replaces a button label to show immediate feedback.
+ *
+ * @param {HTMLButtonElement|HTMLElement} button - Button to update.
+ * @param {string} text - Temporary label.
+ */
 export function flashButtonState(button, text) {
   const original = button.textContent;
   button.textContent = text;
   window.setTimeout(() => { button.textContent = original; }, 1400);
 }
 
+/**
+ * Builds an app page URL relative to the current page.
+ *
+ * @param {string} pageName - Page basename without `.html`.
+ * @param {Object.&lt;string, string>} params - Query parameters to include.
+ * @returns {string} Absolute URL string.
+ */
 export function buildPageUrl(pageName, params) {
   const url = new URL(`./${pageName}.html`, window.location.href);
   Object.entries(params).forEach(([key, value]) => {
@@ -713,6 +809,14 @@ export function downloadText(filename, contents) {
 
 // ── Device ID ────────────────────────────────────────────────────
 
+/**
+ * Returns the current browser device ID, creating one if needed.
+ *
+ * The ID is local to the browser and is used only for lightweight classroom
+ * submission limits.
+ *
+ * @returns {string} Stable local device identifier.
+ */
 export function getOrCreateDeviceId() {
   const existing = window.localStorage.getItem(DEVICE_STORAGE_KEY);
   if (existing) return existing;
@@ -723,26 +827,57 @@ export function getOrCreateDeviceId() {
 
 // ── Sanitisation &amp; formatting ────────────────────────────────────
 
+/**
+ * Sanitizes room codes and simple URL tokens.
+ *
+ * @param {string} value - Raw token.
+ * @returns {string} Lowercase token containing letters, numbers, hyphens, or underscores.
+ */
 export function sanitizeSimpleToken(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9-_]/g, "") || "";
 }
 
+/**
+ * Sanitizes presenter host tokens while preserving URL-safe token characters.
+ *
+ * @param {string} value - Raw host token.
+ * @returns {string} Sanitized host token.
+ */
 export function sanitizeHostToken(value) {
   return String(value || "").trim().replace(/[^A-Za-z0-9-_.~]/g, "") || "";
 }
 
+/**
+ * Normalizes a session file query parameter to a safe basename.
+ *
+ * @param {string} value - Raw session filename or basename.
+ * @returns {string} Safe session basename, or an empty string if invalid.
+ */
 export function normalizeSessionName(value) {
   const normalized = String(value || "").trim().replace(/\.json$/i, "").replace(/^\/+|\/+$/g, "");
   if (!/^[A-Za-z0-9][A-Za-z0-9-_]*$/.test(normalized)) return "";
   return normalized;
 }
 
+/**
+ * Sanitizes an activity or column ID, falling back to a generated ID.
+ *
+ * @param {string} value - Raw ID.
+ * @param {number} index - Position used for fallback IDs.
+ * @returns {string} Safe ID.
+ */
 export function sanitizeActivityId(value, index) {
   const normalized = String(value || "").trim().toLowerCase()
     .replace(/[^a-z0-9-_]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   return normalized || `activity-${index + 1}`;
 }
 
+/**
+ * Converts an activity type to a human-readable label.
+ *
+ * @param {string} type - Activity type.
+ * @returns {string} Display label.
+ */
 export function humanizeType(type) {
   if (type === "quiz") return "Quiz";
   if (type === "text") return "Short text";
@@ -751,23 +886,50 @@ export function humanizeType(type) {
   return "Poll";
 }
 
+/**
+ * Returns the default participant-page description.
+ *
+ * @returns {string} Default description.
+ */
 export function defaultDescription() {
   return "Answer the active prompt and stay synced with the presenter.";
 }
 
 // ── Math / data helpers ──────────────────────────────────────────
 
+/**
+ * Clamps an index to a valid item position.
+ *
+ * @param {number} value - Candidate index.
+ * @param {number} total - Number of items.
+ * @returns {number} Safe zero-based index.
+ */
 export function clampIndex(value, total) {
   if (!Number.isFinite(value) || total &lt;= 0) return 0;
   return Math.max(0, Math.min(total - 1, Math.trunc(value)));
 }
 
+/**
+ * Converts and clamps a number, returning a fallback for invalid input.
+ *
+ * @param {number|string} value - Candidate number.
+ * @param {number} min - Minimum value.
+ * @param {number} max - Maximum value.
+ * @param {number} fallback - Value used when input is not finite.
+ * @returns {number} Clamped integer.
+ */
 export function clampNumber(value, min, max, fallback) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(numeric)));
 }
 
+/**
+ * Creates a short deterministic non-cryptographic hash string.
+ *
+ * @param {string} value - Input value.
+ * @returns {string} Hash string prefixed with `s`.
+ */
 export function hashString(value) {
   let hash = 5381;
   for (let i = 0; i &lt; value.length; i += 1) {
@@ -776,6 +938,12 @@ export function hashString(value) {
   return `s${(hash >>> 0).toString(36)}`;
 }
 
+/**
+ * Serializes values with stable object key ordering.
+ *
+ * @param {*} value - Value to serialize.
+ * @returns {string} Stable JSON-like string.
+ */
 export function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
   if (value &amp;&amp; typeof value === "object") {
@@ -784,6 +952,12 @@ export function stableStringify(value) {
   return JSON.stringify(value);
 }
 
+/**
+ * Finds duplicate IDs while preserving first-seen uniqueness semantics.
+ *
+ * @param {string[]} ids - IDs to inspect.
+ * @returns {string[]} Duplicate IDs.
+ */
 export function findDuplicateIds(ids) {
   const seen = new Set();
   const duplicates = new Set();
@@ -806,10 +980,23 @@ export function escapeHtml(value) {
     .replace(/'/g, "&amp;#39;");
 }
 
+/**
+ * Escapes a string for use in an HTML attribute.
+ *
+ * @param {string} value - Unsafe string.
+ * @returns {string} Attribute-safe string.
+ */
 export function escapeAttribute(value) {
   return escapeHtml(value).replace(/`/g, "&amp;#96;");
 }
 
+/**
+ * Returns a trimmed string value or a fallback.
+ *
+ * @param {string} value - Candidate string.
+ * @param {string} fallback - Fallback when the value is empty.
+ * @returns {string} Non-empty display string.
+ */
 export function readOrFallback(value, fallback) {
   return String(value || "").trim() || fallback;
 }
@@ -829,7 +1016,7 @@ export function readOrFallback(value, fallback) {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Jun 24 2026 10:04:38 GMT+0100 (British Summer Time)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Jun 24 2026 10:13:02 GMT+0100 (British Summer Time)
 </footer>
 
 <script> prettyPrint(); </script>

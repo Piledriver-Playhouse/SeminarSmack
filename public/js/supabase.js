@@ -43,6 +43,16 @@ export function getConfigStatus() {
   };
 }
 
+/**
+ * Creates or returns the cached Supabase browser client.
+ *
+ * The app disables Supabase auth session persistence because SeminarSmack uses
+ * Realtime Broadcast only; presenter control is handled by the host-token event
+ * signature flow instead of Supabase user accounts.
+ *
+ * @returns {Object} The Supabase browser client instance.
+ * @throws {Error} If config is missing or the Supabase browser library is unavailable.
+ */
 export function createRealtimeClient() {
   if (supabaseClient) {
     return supabaseClient;

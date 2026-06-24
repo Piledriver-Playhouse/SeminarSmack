@@ -134,36 +134,60 @@ Common failure points:
 - Supabase Realtime is unavailable or blocked by the local network.
 - `public/js/config.js` was expected to be committed; it is generated in deployment and ignored for local use.
 
-## Example Activity JSON
+## Example Session JSON
 
-### Rating
-
-```json
-{
-  "id": "rate-session-feedback",
-  "type": "rate",
-  "title": "How useful was this session?",
-  "prompt": "Rate the session and optionally leave a comment.",
-  "maxRating": 5,
-  "comment": true
-}
-```
-
-### Kanban
+This is the shape SeminarSmack validates and stores. Activity IDs must be unique.
 
 ```json
 {
-  "id": "project-kanban",
-  "type": "kanban",
-  "title": "Project Ideas Board",
-  "prompt": "Add an idea, reference image, video, GIF, or useful link.",
-  "columns": [
-    { "id": "ideas", "title": "Ideas" },
-    { "id": "in-progress", "title": "In Progress" },
-    { "id": "done", "title": "Done" }
+  "title": "Week 3 Check-in",
+  "description": "Quick activities for a live seminar.",
+  "activities": [
+    {
+      "id": "readiness-poll",
+      "type": "poll",
+      "question": "How ready are you to start?",
+      "options": ["Ready", "Need a recap", "Not sure yet"]
+    },
+    {
+      "id": "concept-quiz",
+      "type": "quiz",
+      "question": "Which term best describes formative feedback?",
+      "options": ["Feedback during learning", "A final grade", "Attendance tracking"],
+      "correctIndex": 0
+    },
+    {
+      "id": "muddiest-point",
+      "type": "text",
+      "question": "What is the muddiest point from today?",
+      "maxLength": 180
+    },
+    {
+      "id": "session-rating",
+      "type": "rate",
+      "question": "How useful was this session?",
+      "prompt": "Rate the session and optionally leave a comment.",
+      "maxRating": 5,
+      "comment": true
+    },
+    {
+      "id": "project-kanban",
+      "type": "kanban",
+      "question": "Add a project idea or useful resource.",
+      "prompt": "Cards can include text plus an optional image, video, GIF, or link URL.",
+      "columns": [
+        { "id": "ideas", "title": "Ideas" },
+        { "id": "in-progress", "title": "In Progress" },
+        { "id": "done", "title": "Done" }
+      ]
+    }
   ]
 }
 ```
+
+Validation rules are implemented in `validateSession()` and `normalizeActivity()`.
+The generated API reference documents the helper functions that enforce this
+schema.
 
 ## Repository Layout
 
