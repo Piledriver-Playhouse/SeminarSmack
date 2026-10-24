@@ -280,6 +280,7 @@ function renderPresenter(runtime) {
         ${renderMetricCard("Current", activity ? `${getActivityNumber(runtime.session, activity.id)} / ${runtime.session.activities.length}` : "—", activity ? humanizeType(activity.type) : "None")}
         ${renderMetricCard("Status", escapeHtml(runtime.connectionLabel), runtime.connectionTone === "success" ? "Live" : "Offline")}
         ${renderMetricCard("Questions", String(runtime.presenterState?.questions?.length || 0), "Anonymous")}
+        ${runtime.session.leaderboardEnabled ? renderMetricCard("Leaderboard", String(runtime.presenterState?.leaderboard?.length || 0), "Nicknames only") : ""}
       </div>
     </div>
   ` : renderEmptyState("No session loaded", "Create a session first or add ?session=filename to the URL.");
@@ -348,6 +349,10 @@ function renderPresenter(runtime) {
       ${renderResults(runtime, activity, actState)}
     </div>
   ` : renderEmptyState("No results", "Results appear once students submit.");
+
+  if (runtime.session?.leaderboardEnabled) {
+    resultsStage.innerHTML += renderLeaderboard(runtime.presenterState?.leaderboard || [], "Session leaderboard");
+  }
 
   questionsPanel.innerHTML = `
     <div class="activity-shell">
@@ -619,6 +624,8 @@ async function handleSubmission(runtime, expectedType, payload) {
   const deviceId = sanitizeSimpleToken(payload.deviceId);
   if (!deviceId) return;
 
+  const alias = sanitizeAlias(payload.alias || "Player");
+
   const actState = runtime.presenterState.activityStates[activity.id];
   const entry = actState.submissionsByDevice[deviceId] || { count: 0, lastSubmittedAt: 0, choiceIndex: null, resetCount: actState.resetCount };
   if (Date.now() - entry.lastSubmittedAt < COOLDOWN_MS) return;
@@ -652,6 +659,9 @@ async function handleSubmission(runtime, expectedType, payload) {
     if (!Number.isInteger(oi) || oi < 0 || oi >= activity.options.length || entry.count >= SUBMISSION_LIMITS[expectedType]) return;
     actState.counts[oi] = (actState.counts[oi] || 0) + 1;
     entry.choiceIndex = oi;
+    if (runtime.session.leaderboardEnabled && expectedType === "quiz" && activity.correctIndex === oi) {
+      updateLeaderboard(runtime, alias, 100);
+    }
   }
 
   entry.count += 1;
@@ -710,6 +720,7 @@ function buildSnapshot(runtime, reason) {
     revealedActivityIds: [...runtime.presenterState.revealedActivityIds],
     activityStates: states,
     questions: runtime.presenterState.questions.map((question) => ({ ...question })),
+    leaderboard: runtime.session.leaderboardEnabled ? runtime.presenterState.leaderboard.map((entry) => ({ ...entry })) : [],
     sessionClosed: runtime.presenterState.sessionClosed,
     sentAt: new Date().toISOString()
   };
@@ -734,6 +745,7 @@ function exportResponses(runtime) {
     sessionCode: runtime.room,
     sessionTitle: runtime.session.title,
     exportedAt: new Date().toISOString(),
+    leaderboard: runtime.session.leaderboardEnabled ? runtime.presenterState.leaderboard.map((entry) => ({ ...entry })) : [],
     activities: runtime.session.activities.map((activity) => {
       const state = runtime.presenterState.activityStates[activity.id];
       const base = {
@@ -770,6 +782,23 @@ function normalizeQuestion(value) {
   const text = String(value?.text || "").trim().slice(0, 280);
   if (!id || !text) return null;
   return { id, text, anonymous: value?.anonymous !== false, submittedAt: String(value?.submittedAt || new Date().toISOString()) };
+}
+
+function sanitizeAlias(value) {
+  return String(value || "Player").trim().replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 20) || "Player";
+}
+
+function updateLeaderboard(runtime, alias, points) {
+  const existing = runtime.presenterState.leaderboard.find((entry) => entry.alias === alias);
+  if (existing) existing.score += points;
+  else runtime.presenterState.leaderboard.push({ alias, score: points });
+  runtime.presenterState.leaderboard.sort((a, b) => b.score - a.score || a.alias.localeCompare(b.alias));
+  runtime.presenterState.leaderboard = runtime.presenterState.leaderboard.slice(0, 50);
+}
+
+function renderLeaderboard(entries, title) {
+  if (!entries.length) return `<section class="leaderboard-panel"><p class="section-kicker">${escapeHtml(title)}</p><p class="muted">Scores will appear after the first correct answer.</p></section>`;
+  return `<section class="leaderboard-panel"><div class="title-row"><div><p class="section-kicker">${escapeHtml(title)}</p><h2 class="activity-title">Top players</h2></div><span class="badge badge-accent">Temporary</span></div><ol class="leaderboard-list">${entries.slice(0, 10).map((entry, index) => `<li><span class="leaderboard-rank">${index + 1}</span><span>${escapeHtml(entry.alias)}</span><strong>${entry.score}</strong></li>`).join("")}</ol><p class="privacy-hint">Nicknames are only used for this live session and are not saved to an account.</p></section>`;
 }
 
 function renderKanbanBoard(activity, cards) {

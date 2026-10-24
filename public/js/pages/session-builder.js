@@ -25,6 +25,7 @@ import {
 let state = {
   title: "",
   description: "",
+  leaderboardEnabled: false,
   activities: [],
   roomCode: "",
   hostToken: ""
@@ -65,6 +66,8 @@ function render() {
   root.innerHTML = `
     <div class="stack-lg">
 
+      <div class="notice notice-info"><strong>Privacy first.</strong> Keep sessions anonymous and avoid asking for names or sensitive personal data. Live responses are temporary unless you export them.</div>
+
       <!-- Session info -->
       <label class="field">
         <span>Session title</span>
@@ -73,6 +76,11 @@ function render() {
       <label class="field">
         <span>Description (optional)</span>
         <input id="builder-desc" type="text" placeholder="e.g. Quick check on last week's reading" value="${escapeAttribute(state.description)}" />
+      </label>
+
+      <label class="privacy-toggle">
+        <input id="builder-leaderboard" type="checkbox" ${state.leaderboardEnabled ? "checked" : ""} />
+        <span><strong>Enable a temporary leaderboard</strong><small>Participants use session-only nicknames. No names or accounts are required.</small></span>
       </label>
 
       <!-- Room code display -->
@@ -265,6 +273,10 @@ function bindEvents() {
   });
   document.getElementById("builder-desc")?.addEventListener("input", (e) => {
     state.description = e.target.value;
+    saveDraft();
+  });
+  document.getElementById("builder-leaderboard")?.addEventListener("change", (e) => {
+    state.leaderboardEnabled = e.target.checked;
     saveDraft();
   });
 

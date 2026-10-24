@@ -28,6 +28,7 @@
  * @typedef {Object} Session
  * @property {string} title - Title of the session.
  * @property {string} description - Optional description.
+ * @property {boolean} leaderboardEnabled - Whether the temporary nickname leaderboard is enabled.
  * @property {SessionActivity[]} activities - List of activities in the session.
  */
 
@@ -291,7 +292,7 @@ export function validateSession(raw) {
     ok: errors.length === 0,
     errors,
     session: errors.length === 0
-      ? { title, description: typeof raw.description === "string" ? raw.description.trim() : "", activities }
+      ? { title, description: typeof raw.description === "string" ? raw.description.trim() : "", leaderboardEnabled: Boolean(raw.leaderboardEnabled), activities }
       : null
   };
 }
@@ -369,6 +370,7 @@ export function createPresenterState(session) {
     revealedActivityIds: new Set(),
     questions: [],
     sessionClosed: false,
+    leaderboard: [],
     activityStates: Object.fromEntries(
       session.activities.map((a) => [a.id, createPresenterActivityState(a)])
     )
@@ -406,6 +408,7 @@ export function createPublicState(session) {
     revealedActivityIds: new Set(),
     questions: [],
     sessionClosed: false,
+    leaderboard: [],
     activityStates: Object.fromEntries(
       session.activities.map((a) => [
         a.id,

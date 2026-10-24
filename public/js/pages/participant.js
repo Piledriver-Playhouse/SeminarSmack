@@ -32,6 +32,7 @@ export async function initJoinPage() {
   const runtime = {
     page: "join", room, sessionParam, hostToken: "",
     deviceId: getOrCreateDeviceId(),
+    alias: getOrCreateAlias(),
     channel: null, client: null,
     session: null, sessionHash: "",
     sessionSource: sessionParam ? `${sessionParam}.json` : "not loaded",
@@ -230,6 +231,7 @@ function applySnapshot(runtime, payload) {
   nextState.revealedActivityIds = new Set(Array.isArray(payload.revealedActivityIds) ? payload.revealedActivityIds : []);
   nextState.questions = Array.isArray(payload.questions) ? payload.questions.map(normalizeQuestion).filter(Boolean) : [];
   nextState.sessionClosed = Boolean(payload.sessionClosed);
+  nextState.leaderboard = Array.isArray(payload.leaderboard) ? payload.leaderboard.map((entry) => ({ alias: String(entry.alias || "Player").slice(0, 20), score: Number(entry.score) || 0 })) : [];
 
   Object.entries(nextState.activityStates).forEach(([aid, state]) => {
     const incoming = payload.activityStates?.[aid] || {};
@@ -306,6 +308,10 @@ function renderAudience(runtime) {
     </div>
   ` : renderEmptyState("No results yet", "Results appear here once a question is active.");
 
+  if (runtime.session?.leaderboardEnabled) {
+    resultsStage.innerHTML += renderLeaderboard(runtime.sharedState?.leaderboard || [], runtime.alias);
+  }
+
   questionsStage.innerHTML = runtime.sharedState?.sessionClosed
     ? renderEmptyState("Questions closed", "The presenter has ended the session.")
     : renderQuestionsPanel(runtime);
@@ -323,6 +329,7 @@ function renderJoinForm(runtime) {
   return `
     <form id="manual-join-form" class="stack-lg">
       <label class="field"><span>Room code</span><input id="manual-room-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="e.g. spark-1234" value="${escapeAttribute(runtime.room || "")}" /></label>
+      ${runtime.session?.leaderboardEnabled ? '<label class="field"><span>Leaderboard nickname <small>(optional)</small></span><input id="participant-alias" type="text" maxlength="20" placeholder="e.g. Blue Fox" value="' + escapeAttribute(runtime.alias) + '" /><small class="muted">Use a nickname, not your real name.</small></label>' : ''}
       <div class="control-row">
         <button class="button button-primary" type="submit">Join session</button>
       </div>
@@ -477,6 +484,11 @@ function getGate(runtime, activity) {
 
 function bindSubmissions(runtime, activity) {
   bindJoinForm(runtime);
+  const aliasInput = document.getElementById("participant-alias");
+  aliasInput?.addEventListener("input", () => {
+    runtime.alias = aliasInput.value.trim().slice(0, 20) || "Player";
+    window.localStorage.setItem("seminarsmack:alias", runtime.alias);
+  });
   bindQuestionForm(runtime);
   if (!activity) return;
 
@@ -542,7 +554,7 @@ async function submitChoice(runtime, activity, optionIndex) {
 
   try {
     await sendBroadcast(runtime.channel, activity.type === "quiz" ? "quiz_submitted" : "vote_submitted", {
-      activityId: activity.id, deviceId: runtime.deviceId, optionIndex, sentAt: new Date().toISOString()
+      activityId: activity.id, deviceId: runtime.deviceId, alias: runtime.alias, optionIndex, sentAt: new Date().toISOString()
     });
     recordLocalSubmission(runtime, activity.id, { countIncrement: 1, choiceIndex: optionIndex });
     runtime.bannerMessage = "Answer submitted!";
@@ -652,6 +664,17 @@ function renderQuestionsPanel(runtime) {
       </form>
     </div>
   `;
+}
+
+function getOrCreateAlias() {
+  const existing = window.localStorage.getItem("seminarsmack:alias");
+  return String(existing || "Player").trim().slice(0, 20) || "Player";
+}
+
+function renderLeaderboard(entries, alias) {
+  if (!entries.length) return `<section class="leaderboard-panel"><p class="section-kicker">Leaderboard</p><p class="muted">Scores will appear after the first correct answer.</p></section>`;
+  const current = entries.findIndex((entry) => entry.alias === alias);
+  return `<section class="leaderboard-panel"><div class="title-row"><div><p class="section-kicker">Leaderboard</p><h2 class="activity-title">Top players</h2></div><span class="badge badge-accent">Temporary</span></div><ol class="leaderboard-list">${entries.slice(0, 10).map((entry, index) => `<li class="${entry.alias === alias ? "is-you" : ""}"><span class="leaderboard-rank">${index + 1}</span><span>${escapeHtml(entry.alias)}${entry.alias === alias ? " (you)" : ""}</span><strong>${entry.score}</strong></li>`).join("")}</ol>${current < 0 ? "" : '<p class="privacy-hint">Your nickname is only used for this live session.</p>'}</section>`;
 }
 
 function bindQuestionForm(runtime) {
