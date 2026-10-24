@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const storage = new Map();
@@ -79,4 +80,40 @@ test("host token storage keys use sanitized room codes", () => {
     app.buildHostTokenStoreKey("SPARK 1234!"),
     "seminarsmack:host-token:spark1234"
   );
+});
+
+test("leaderboard sessions require a correct answer for every quiz", () => {
+  const result = app.validateSession({
+    title: "Quiz night",
+    leaderboardEnabled: true,
+    activities: [{ id: "q1", type: "quiz", question: "Pick one", options: ["A", "B"] }]
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join(" "), /correct answer/);
+});
+
+test("leaderboard-enabled sessions preserve the setting and initialise empty scores", () => {
+  const result = app.validateSession({
+    title: "Quiz night",
+    leaderboardEnabled: true,
+    activities: [{ id: "q1", type: "quiz", question: "Pick one", options: ["A", "B"], correctIndex: 0 }]
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.session.leaderboardEnabled, true);
+  assert.deepEqual(app.createPresenterState(result.session).leaderboard, []);
+});
+
+test("presenter and participant pages expose the focused navigation shells", async () => {
+  const presenter = await readFile(new URL("../public/present.html", import.meta.url), "utf8");
+  const participant = await readFile(new URL("../public/join.html", import.meta.url), "utf8");
+
+  assert.match(presenter, /data-presenter-tab="overview"/);
+  assert.match(presenter, /data-presenter-tab="join"/);
+  assert.match(presenter, /id="activity-stage"/);
+  assert.match(presenter, /id="results-stage"/);
+  assert.match(participant, /data-participant-tab="answer"/);
+  assert.match(participant, /data-participant-tab="results"/);
+  assert.match(participant, /data-participant-tab="questions"/);
 });

@@ -252,6 +252,7 @@ export function validateSession(raw) {
   }
 
   const title = typeof raw.title === "string" ? raw.title.trim() : "";
+  const leaderboardEnabled = Boolean(raw.leaderboardEnabled);
   if (!title) errors.push("Session title is required.");
 
   if (!Array.isArray(raw.activities) || raw.activities.length === 0) {
@@ -285,6 +286,9 @@ export function validateSession(raw) {
       (a.correctIndex < 0 || a.correctIndex >= a.options.length)
     ) {
       errors.push(`${a.id} has an invalid correctIndex.`);
+    }
+    if (leaderboardEnabled && a.type === "quiz" && a.correctIndex === null) {
+      errors.push(`${a.id} needs a correct answer when the leaderboard is enabled.`);
     }
   });
 

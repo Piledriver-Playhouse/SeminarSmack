@@ -16,19 +16,20 @@
     <script type="module" src="./js/app.js"></script>
   </head>
   <body data-page="join" class="participant-view">
-    <main class="shell">
-      <header class="subhero panel">
-        <div>
-          <p class="section-kicker">Student view</p>
-          <h1>Join session</h1>
-        </div>
-        <a class="button button-ghost" href="./index.html">Home</a>
-      </header>
-      <div id="page-status" class="status-banner" aria-live="polite"></div>
-      <section id="session-summary" class="panel panel-spacious"></section>
-      <section id="activity-stage" class="panel panel-spacious"></section>
-      <section id="results-stage" class="panel panel-spacious"></section>
-      <section id="questions-stage" class="panel panel-spacious"></section>
-    </main>
+    <div class="app-shell participant-shell">
+      <header class="app-topbar"><a class="brand" href="./index.html"><img src="./assets/img/logo.png" alt="" /><span>SeminarSmack</span></a><span class="live-dot">Participant</span></header>
+      <main class="participant-main">
+        <div id="page-status" class="status-banner" aria-live="polite"></div>
+        <section id="session-summary" class="participant-session-card"></section>
+        <nav class="participant-tabs" aria-label="Participant views">
+          <button class="participant-tab is-active" type="button" data-participant-tab="answer">Answer</button>
+          <button class="participant-tab" type="button" data-participant-tab="results">Results</button>
+          <button class="participant-tab" type="button" data-participant-tab="questions">Ask a question</button>
+        </nav>
+        <section id="activity-stage" class="participant-card"></section>
+        <section id="results-stage" class="participant-card"></section>
+        <section id="questions-stage" class="participant-card"></section>
+      </main>
+    </div>
   </body>
 </html>

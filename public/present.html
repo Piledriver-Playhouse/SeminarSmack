@@ -23,16 +23,16 @@
     <script type="module" src="./js/app.js"></script>
   </head>
   <body data-page="present" class="presenter-focus">
-    <main class="shell shell-wide">
-      <header class="subhero panel">
-        <div>
-          <p class="section-kicker">Presenter</p>
-          <h1>Host your session</h1>
-        </div>
-        <a class="button button-ghost" href="./index.html">Home</a>
+    <div class="app-shell">
+      <header class="app-topbar">
+        <a class="brand" href="./index.html"><img src="./assets/img/logo.png" alt="" /><span>SeminarSmack</span></a>
+        <div class="topbar-actions"><span class="live-dot">Presenter</span><a class="button button-ghost button-small" href="./index.html">Exit</a></div>
       </header>
 
-      <div id="page-status" class="status-banner" aria-live="polite"></div>
+      <main class="presenter-main">
+        <div id="page-status" class="status-banner" aria-live="polite"></div>
+
+        <section id="session-summary" class="session-summary-card"></section>
 
       <nav class="presenter-tabs" aria-label="Presenter views">
         <button class="presenter-tab is-active" type="button" data-presenter-tab="overview">Run session</button>
@@ -42,7 +42,6 @@
       </nav>
 
       <div class="dashboard-grid">
-        <section id="session-summary" class="panel panel-spacious"></section>
         <section id="qr-panel" class="panel panel-spacious"></section>
         <section id="control-panel" class="panel panel-spacious"></section>
         <section id="activity-stage" class="panel panel-spacious"></section>
@@ -50,6 +49,7 @@
         <section id="questions-panel" class="panel panel-spacious"></section>
         <section id="authoring-panel" class="panel panel-spacious"></section>
       </div>
-    </main>
+      </main>
+    </div>
   </body>
 </html>

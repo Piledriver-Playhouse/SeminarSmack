@@ -34,6 +34,7 @@ export async function initJoinPage() {
     deviceId: getOrCreateDeviceId(),
     alias: getStoredAlias(),
     aliasSet: Boolean(getStoredAlias()),
+    participantTab: "answer",
     channel: null, client: null,
     session: null, sessionHash: "",
     sessionSource: sessionParam ? `${sessionParam}.json` : "not loaded",
@@ -125,6 +126,10 @@ export async function initJoinPage() {
         const rev = Number(p.revision) || 0;
         if (rev < runtime.sharedState.revision) return;
         const aid = String(p.activityId || "");
+        const revealedActivity = runtime.session.activities.find((activity) => activity.id === aid);
+        if (revealedActivity?.type === "quiz" && Boolean(p.revealed)) {
+          revealedActivity.correctIndex = Number.isInteger(Number(p.correctIndex)) ? Number(p.correctIndex) : null;
+        }
         if (Boolean(p.revealed)) runtime.sharedState.revealedActivityIds.add(aid);
         else runtime.sharedState.revealedActivityIds.delete(aid);
         runtime.sharedState.revision = rev;
@@ -267,6 +272,7 @@ function renderAudience(runtime) {
 
   setBanner(pageStatus, runtime.bannerMessage, runtime.bannerTone);
   if (!sessionSummary || !activityStage || !resultsStage || !questionsStage) return;
+  bindParticipantTabs(runtime);
 
   const activity = runtime.sharedState?.sessionClosed ? null : getCurrentActivity(runtime.session, runtime.sharedState);
   const actState = activity ? runtime.sharedState?.activityStates[activity.id] : null;
@@ -328,6 +334,29 @@ function renderAudience(runtime) {
   }
 }
 
+function bindParticipantTabs(runtime) {
+  document.querySelectorAll("[data-participant-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.participantTab === runtime.participantTab);
+    button.onclick = () => {
+      runtime.participantTab = button.dataset.participantTab || "answer";
+      applyParticipantTab(runtime.participantTab);
+      document.querySelectorAll("[data-participant-tab]").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.participantTab === runtime.participantTab));
+    };
+  });
+  applyParticipantTab(runtime.participantTab);
+}
+
+function applyParticipantTab(tab) {
+  const activity = document.getElementById("activity-stage");
+  const results = document.getElementById("results-stage");
+  const questions = document.getElementById("questions-stage");
+  if (!activity || !results || !questions) return;
+  activity.hidden = tab !== "answer";
+  results.hidden = tab !== "results";
+  questions.hidden = tab !== "questions";
+  results.classList.toggle("show-results", tab === "results");
+}
+
 function renderJoinForm(runtime) {
   return `
     <form id="manual-join-form" class="stack-lg">
@@ -343,6 +372,7 @@ function renderActivityUI(runtime, activity, actState) {
   const gate = getGate(runtime, activity);
   const localEntry = getLocalSubmissionEntry(runtime, activity.id, actState?.resetCount || 0);
   const selected = Number.isInteger(localEntry.choiceIndex) ? localEntry.choiceIndex : null;
+  const revealed = activity.type === "quiz" && isActivityRevealed(runtime.sharedState, activity.id);
 
   if (activity.type === "text") {
     return `
@@ -414,14 +444,16 @@ function renderActivityUI(runtime, activity, actState) {
         <div><p class="section-kicker">Choose an answer</p><h2 class="activity-title">${escapeHtml(activity.question)}</h2></div>
         <span class="badge ${runtime.sharedState?.submissionsLocked ? 'badge-locked' : 'badge-open'}">${runtime.sharedState?.submissionsLocked ? 'Closed' : 'Open'}</span>
       </div>
-      <div class="choice-grid">
+      <div class="choice-grid response-chart">
         ${activity.options.map((opt, i) => {
           const isSel = selected === i;
+          const isCorrect = revealed && activity.correctIndex === i;
+          const isIncorrect = revealed && activity.correctIndex !== i;
           const dis = !gate.canSubmit || (selected !== null && !isSel);
           return `
-            <article class="choice-card ${isSel ? 'is-selected' : ''} ${dis ? 'is-disabled' : ''}">
-              <div class="choice-header"><span>${escapeHtml(opt)}</span>${isSel ? '<span class="badge badge-open">Your choice</span>' : ''}</div>
-              <button class="button ${isSel ? 'button-secondary' : 'button-ghost'} choice-select button-lg" type="button" data-submit-choice="${i}" ${dis ? 'disabled' : ''}>${isSel ? 'Selected ✓' : 'Select'}</button>
+            <article class="choice-card ${isSel ? 'is-selected' : ''} ${isCorrect ? 'is-correct' : ''} ${isIncorrect ? 'is-incorrect' : ''} ${dis ? 'is-disabled' : ''}">
+              <div class="choice-header"><span>${escapeHtml(opt)}</span>${isCorrect ? '<span class="answer-state correct">✓ Correct</span>' : isIncorrect ? '<span class="answer-state incorrect">✕ Incorrect</span>' : isSel ? '<span class="badge badge-open">Your choice</span>' : ''}</div>
+              ${revealed ? `<div class="choice-meta">${isSel ? (isCorrect ? 'Your answer was correct.' : 'Your answer was incorrect.') : 'Answer revealed.'}</div>` : `<button class="button ${isSel ? 'button-secondary' : 'button-ghost'} choice-select button-lg" type="button" data-submit-choice="${i}" ${dis ? 'disabled' : ''}>${isSel ? 'Selected ✓' : 'Select'}</button>`}
             </article>
           `;
         }).join("")}
@@ -447,6 +479,7 @@ function renderResultsUI(runtime, activity, actState) {
           ${renderMetricCard("Average", `${average} / ${activity.maxRating || 5}`, "Live")}
           ${renderMetricCard("Ratings", String(ratings.length), "Submitted")}
         </div>
+        ${renderRatingChart(ratings, activity.maxRating || 5)}
         ${comments.length ? `<div class="text-entry-list">${comments.slice().reverse().map((entry) => `<article class="text-card"><p>${escapeHtml(entry.comment)}</p><small>${"★".repeat(entry.rating)}${"☆".repeat(Math.max((activity.maxRating || 5) - entry.rating, 0))}</small></article>`).join("")}</div>` : renderEmptyState("No comments yet", "Optional comments will appear here.")}
       </div>
     `;
@@ -463,6 +496,13 @@ function renderResultsUI(runtime, activity, actState) {
     const correct = reveal && activity.correctIndex === i;
     return `<article class="choice-card ${correct ? 'is-correct' : ''}"><div class="choice-header"><span>${escapeHtml(opt)}</span><strong>${count}</strong></div><div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div><div class="choice-meta"><span>${pct}%</span><span>${count} response${count === 1 ? '' : 's'}</span></div>${correct ? '<span class="badge badge-open">Correct answer</span>' : ''}</article>`;
   }).join("")}</div>`;
+}
+
+function renderRatingChart(ratings, maxRating) {
+  const counts = Array.from({ length: maxRating }, () => 0);
+  ratings.forEach((entry) => { if (entry.rating >= 1 && entry.rating <= maxRating) counts[entry.rating - 1] += 1; });
+  const max = Math.max(...counts, 1);
+  return `<div class="rating-chart" aria-label="Rating distribution">${counts.map((count, index) => `<div class="rating-bar"><span>${index + 1}★</span><div class="meter"><div class="meter-fill" style="width:${Math.round((count / max) * 100)}%"></div></div><strong>${count}</strong></div>`).join("")}</div>`;
 }
 
 // ── Submission logic ───────────────────────────────────────────

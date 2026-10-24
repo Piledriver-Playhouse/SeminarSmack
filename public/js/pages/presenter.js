@@ -277,11 +277,8 @@ function renderPresenter(runtime) {
       </div>
       <div class="metric-grid">
         ${renderMetricCard("Room", `<span class="mono">${escapeHtml(runtime.room || "n/a")}</span>`, "Broadcast channel")}
-        ${renderMetricCard("Activities", String(runtime.session.activities.length), runtime.sessionSource)}
         ${renderMetricCard("Current", activity ? `${getActivityNumber(runtime.session, activity.id)} / ${runtime.session.activities.length}` : "—", activity ? humanizeType(activity.type) : "None")}
         ${renderMetricCard("Status", escapeHtml(runtime.connectionLabel), runtime.connectionTone === "success" ? "Live" : "Offline")}
-        ${renderMetricCard("Questions", String(runtime.presenterState?.questions?.length || 0), "Anonymous")}
-        ${runtime.session.leaderboardEnabled ? renderMetricCard("Leaderboard", String(runtime.presenterState?.leaderboard?.length || 0), "Nicknames only") : ""}
       </div>
     </div>
   ` : renderEmptyState("No session loaded", "Create a session first or add ?session=filename to the URL.");
@@ -521,6 +518,7 @@ function renderResults(runtime, activity, actState) {
           ${renderMetricCard("Ratings", String(ratings.length), "Submitted")}
           ${renderMetricCard("Comments", String(comments.length), "Optional")}
         </div>
+        ${renderRatingChart(ratings, activity.maxRating || 5)}
         ${comments.length ? `<div class="text-entry-list">${comments.slice().reverse().map((entry) => `<article class="text-card"><p>${escapeHtml(entry.comment)}</p><small>${"★".repeat(entry.rating)}${"☆".repeat(Math.max((activity.maxRating || 5) - entry.rating, 0))}</small></article>`).join("")}</div>` : renderEmptyState("No comments yet", "Optional comments will appear here.")}
       </div>
     `;
@@ -532,30 +530,38 @@ function renderResults(runtime, activity, actState) {
 
   const revealCorrect = activity.type === "quiz" && isActivityRevealed(runtime.presenterState, activity.id);
   const total = getResponseTotal(activity, actState);
-  return `<div class="choice-grid">${activity.options.map((opt, i) => {
+  return `<div class="choice-grid response-chart">${activity.options.map((opt, i) => {
     const count = actState.counts[i] || 0;
     const pct = total > 0 ? Math.round((count / total) * 100) : 0;
     const correct = revealCorrect && activity.correctIndex === i;
+    const incorrect = revealCorrect && activity.correctIndex !== i;
     return `
-      <article class="choice-card ${correct ? 'is-correct' : ''}">
+      <article class="choice-card ${correct ? 'is-correct' : ''} ${incorrect ? 'is-incorrect' : ''}">
         <div class="choice-header"><span>${escapeHtml(opt)}</span><strong>${count}</strong></div>
         <div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div>
         <div class="choice-meta"><span>${pct}%</span><span>${count} response${count === 1 ? '' : 's'}</span></div>
-        ${correct ? '<span class="badge badge-open">Correct answer</span>' : ''}
+        ${correct ? '<span class="answer-state correct">✓ Correct answer</span>' : incorrect ? '<span class="answer-state incorrect">✕ Incorrect</span>' : ''}
       </article>
     `;
   }).join("")}</div>`;
 }
 
+function renderRatingChart(ratings, maxRating) {
+  const counts = Array.from({ length: maxRating }, () => 0);
+  ratings.forEach((entry) => { if (entry.rating >= 1 && entry.rating <= maxRating) counts[entry.rating - 1] += 1; });
+  const max = Math.max(...counts, 1);
+  return `<div class="rating-chart" aria-label="Rating distribution">${counts.map((count, index) => `<div class="rating-bar"><span>${index + 1}★</span><div class="meter"><div class="meter-fill" style="width:${Math.round((count / max) * 100)}%"></div></div><strong>${count}</strong></div>`).join("")}</div>`;
+}
+
 // ── Interactions ───────────────────────────────────────────────
 
 function bindInteractions(runtime) {
-  document.getElementById("prev-activity")?.addEventListener("click", () => shiftActivity(runtime, -1));
-  document.getElementById("next-activity")?.addEventListener("click", () => shiftActivity(runtime, 1));
-  document.getElementById("toggle-lock")?.addEventListener("click", () => toggleLock(runtime));
-  document.getElementById("reset-activity")?.addEventListener("click", () => resetCurrent(runtime));
-  document.getElementById("toggle-reveal")?.addEventListener("click", () => toggleReveal(runtime));
-  document.getElementById("close-session")?.addEventListener("click", () => closeSession(runtime));
+  document.getElementById("prev-activity")?.addEventListener("click", () => runPresenterCommand(runtime, () => shiftActivity(runtime, -1), "Could not move to the previous activity."));
+  document.getElementById("next-activity")?.addEventListener("click", () => runPresenterCommand(runtime, () => shiftActivity(runtime, 1), "Could not move to the next activity."));
+  document.getElementById("toggle-lock")?.addEventListener("click", () => runPresenterCommand(runtime, () => toggleLock(runtime), "Could not change answer availability."));
+  document.getElementById("reset-activity")?.addEventListener("click", () => runPresenterCommand(runtime, () => resetCurrent(runtime), "Could not reset this activity."));
+  document.getElementById("toggle-reveal")?.addEventListener("click", () => runPresenterCommand(runtime, () => toggleReveal(runtime), "Could not reveal the answer."));
+  document.getElementById("close-session")?.addEventListener("click", () => runPresenterCommand(runtime, () => closeSession(runtime), "Could not end the session."));
   document.getElementById("export-responses")?.addEventListener("click", () => exportResponses(runtime));
 
   document.querySelectorAll("button").forEach((button) => {
@@ -574,6 +580,16 @@ function bindInteractions(runtime) {
     const val = runtime.authoringDraft || (runtime.session ? JSON.stringify(runtime.session, null, 2) : "");
     if (val) downloadText("session.json", val);
   });
+}
+
+async function runPresenterCommand(runtime, command, message) {
+  try {
+    await command();
+  } catch (error) {
+    runtime.bannerMessage = message;
+    runtime.bannerTone = "warning";
+    renderPresenter(runtime);
+  }
 }
 
 async function shiftActivity(runtime, delta) {
@@ -624,7 +640,7 @@ async function toggleReveal(runtime) {
   else runtime.presenterState.revealedActivityIds.delete(activity.id);
   runtime.presenterState.revision += 1;
   saveStickyState(runtime);
-  await sendPresenterEvent(runtime, "reveal_answer", { activityId: activity.id, revealed, revision: runtime.presenterState.revision });
+  await sendPresenterEvent(runtime, "reveal_answer", { activityId: activity.id, revealed, correctIndex: revealed ? activity.correctIndex : null, revision: runtime.presenterState.revision });
   scheduleSnapshot(runtime, "reveal_toggled");
   renderPresenter(runtime);
 }
@@ -720,7 +736,8 @@ async function handleQuestionSubmitted(runtime, payload) {
 // ── Broadcasting ───────────────────────────────────────────────
 
 async function sendPresenterEvent(runtime, name, payload) {
-  if (!runtime.channel || !runtime.hostToken) return;
+  if (!runtime.channel) throw new Error("Presenter is not connected.");
+  if (!runtime.hostToken) throw new Error("Presenter control token is missing.");
   const signed = await signEvent(name, payload, runtime.hostToken);
   await sendBroadcast(runtime.channel, name, signed);
 }
@@ -742,7 +759,7 @@ function buildSnapshot(runtime, reason) {
     Object.entries(runtime.presenterState.activityStates).map(([id, s]) => [id, { counts: [...s.counts], texts: s.texts.map((e) => ({ id: e.id, text: e.text, submittedAt: e.submittedAt })), ratings: s.ratings.map((entry) => ({ ...entry })), cards: s.cards.map((entry) => ({ ...entry })), resetCount: s.resetCount }])
   );
   return {
-    reason, revision: runtime.presenterState.revision, session: runtime.session,
+    reason, revision: runtime.presenterState.revision, session: buildPublicSession(runtime),
     sessionHash: runtime.sessionHash || hashString(stableStringify(runtime.session)),
     currentActivityIndex: runtime.presenterState.currentActivityIndex,
     submissionsLocked: runtime.presenterState.submissionsLocked,
@@ -752,6 +769,17 @@ function buildSnapshot(runtime, reason) {
     leaderboard: runtime.session.leaderboardEnabled ? runtime.presenterState.leaderboard.map((entry) => ({ ...entry })) : [],
     sessionClosed: runtime.presenterState.sessionClosed,
     sentAt: new Date().toISOString()
+  };
+}
+
+function buildPublicSession(runtime) {
+  return {
+    ...runtime.session,
+    activities: runtime.session.activities.map((activity) => {
+      if (activity.type !== "quiz" || isActivityRevealed(runtime.presenterState, activity.id)) return { ...activity };
+      const { correctIndex, ...publicActivity } = activity;
+      return publicActivity;
+    })
   };
 }
 

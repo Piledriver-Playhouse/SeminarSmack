@@ -64,7 +64,12 @@ function render() {
   if (!root) return;
 
   root.innerHTML = `
-    <div class="stack-lg">
+    <div class="builder-layout">
+
+      <div class="builder-intro">
+        <div><p class="section-kicker">Prepare</p><h2>Build a session people can answer in seconds.</h2><p class="body-copy">Add a few activities, then start. You can always import or export a session later.</p></div>
+        <div class="builder-room-card"><span>Room code</span><strong>${escapeHtml(state.roomCode)}</strong><small>Share this after you start.</small></div>
+      </div>
 
       <div class="notice notice-info"><strong>Privacy first.</strong> Keep sessions anonymous and avoid asking for names or sensitive personal data. Live responses are temporary unless you export them.</div>
 
@@ -82,12 +87,6 @@ function render() {
         <input id="builder-leaderboard" type="checkbox" ${state.leaderboardEnabled ? "checked" : ""} />
         <span><strong>Enable a temporary leaderboard</strong><small>Participants use session-only nicknames. No names or accounts are required.</small></span>
       </label>
-
-      <!-- Room code display -->
-      <div style="text-align: center; padding: var(--space-md) 0;">
-        <p class="muted" style="margin: 0 0 var(--space-xs); font-size: 0.85rem;">Your room code</p>
-        <div class="room-code-display">${escapeHtml(state.roomCode)}</div>
-      </div>
 
       <div class="divider"></div>
 
@@ -149,7 +148,7 @@ function render() {
       <div class="divider"></div>
 
       <!-- Actions -->
-      <div class="hero-actions" style="gap: var(--space-sm);">
+      <div class="builder-actions hero-actions">
         <button id="start-session" class="button button-primary button-lg" type="button">
           Start session
         </button>
