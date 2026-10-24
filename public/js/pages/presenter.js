@@ -313,7 +313,7 @@ function renderPresenter(runtime) {
         <details class="control-menu"><summary>More</summary><div class="control-menu-actions">
           <button id="toggle-reveal" class="button button-ghost" type="button" ${controlsDisabled || !canReveal ? 'disabled' : ''}>${isRevealed ? 'Hide answer' : 'Reveal answer'}</button>
           <button id="reset-activity" class="button button-danger" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>Reset question</button>
-          <button id="export-responses" class="button button-ghost" type="button" ${disabled ? 'disabled' : ''}>Export results</button>
+          <button id="export-responses" class="button button-ghost" type="button" ${disabled ? 'disabled' : ''}>Save results</button>
           <button id="close-session" class="button button-danger" type="button" ${disabled || runtime.presenterState?.sessionClosed ? 'disabled' : ''}>${runtime.presenterState?.sessionClosed ? 'Session closed' : 'End session'}</button>
         </div></details>
       </div>
@@ -331,6 +331,7 @@ function renderPresenter(runtime) {
         </div>
         <span class="badge badge-accent">Activity ${getActivityNumber(runtime.session, activity.id)} of ${runtime.session.activities.length}</span>
       </div>
+      ${isRevealed ? '<div class="quiz-reveal-banner">Answer revealed — take a moment to review the result.</div>' : ''}
       ${renderPresenterPreview(runtime, activity, actState)}
     </div>
   ` : renderEmptyState("No active activity", "Load a session to start.");
@@ -372,18 +373,18 @@ function renderPresenter(runtime) {
   // Authoring
   authoringPanel.innerHTML = `
     <div class="authoring-shell">
-      <p class="section-kicker">Session JSON</p>
+          <p class="section-kicker">Session setup</p>
       <details>
-        <summary>Import or export session</summary>
+        <summary>Save or load this session</summary>
         <div class="stack-lg">
           <label class="field">
-            <span>Session JSON</span>
+            <span>Session details</span>
             <textarea id="session-json-input" spellcheck="false">${escapeHtml(runtime.authoringDraft || (runtime.session ? JSON.stringify(runtime.session, null, 2) : ""))}</textarea>
           </label>
           <div class="control-row">
-            <button id="load-session-json" class="button button-secondary" type="button">Load JSON</button>
-            <button id="copy-session-json" class="button button-ghost" type="button">Copy</button>
-            <button id="download-session-json" class="button button-ghost" type="button">Download</button>
+            <button id="load-session-json" class="button button-secondary" type="button">Load session</button>
+            <button id="copy-session-json" class="button button-ghost" type="button">Copy details</button>
+            <button id="download-session-json" class="button button-ghost" type="button">Save a copy</button>
           </div>
         </div>
       </details>
@@ -598,6 +599,9 @@ async function shiftActivity(runtime, delta) {
   const ci = cur ? getActivityNumber(runtime.session, cur.id) - 1 : 0;
   const ni = clampIndex(ci + delta, runtime.session.activities.length);
   if (ni === runtime.presenterState.currentActivityIndex) return;
+  if (cur?.type === "quiz" && !isActivityRevealed(runtime.presenterState, cur.id)) {
+    await revealQuiz(runtime, cur, 900);
+  }
   runtime.presenterState.currentActivityIndex = ni;
   runtime.presenterState.submissionsLocked = false;
   runtime.presenterState.revision += 1;
@@ -617,6 +621,10 @@ async function toggleLock(runtime) {
   runtime.presenterState.revision += 1;
   saveStickyState(runtime);
   await sendPresenterEvent(runtime, "submissions_locked", { locked: runtime.presenterState.submissionsLocked, revision: runtime.presenterState.revision });
+  const activity = getCurrentActivity(runtime.session, runtime.presenterState);
+  if (runtime.presenterState.submissionsLocked && activity?.type === "quiz" && !isActivityRevealed(runtime.presenterState, activity.id)) {
+    await revealQuiz(runtime, activity, 700);
+  }
   scheduleSnapshot(runtime, "lock_toggled");
   renderPresenter(runtime);
 }
@@ -636,13 +644,27 @@ async function toggleReveal(runtime) {
   const activity = getCurrentActivity(runtime.session, runtime.presenterState);
   if (!activity || activity.type !== "quiz") return;
   const revealed = !runtime.presenterState.revealedActivityIds.has(activity.id);
-  if (revealed) runtime.presenterState.revealedActivityIds.add(activity.id);
-  else runtime.presenterState.revealedActivityIds.delete(activity.id);
+  if (revealed) {
+    await revealQuiz(runtime, activity, 0);
+    return;
+  }
+  runtime.presenterState.revealedActivityIds.delete(activity.id);
   runtime.presenterState.revision += 1;
   saveStickyState(runtime);
-  await sendPresenterEvent(runtime, "reveal_answer", { activityId: activity.id, revealed, correctIndex: revealed ? activity.correctIndex : null, revision: runtime.presenterState.revision });
-  scheduleSnapshot(runtime, "reveal_toggled");
+  await sendPresenterEvent(runtime, "reveal_answer", { activityId: activity.id, revealed: false, correctIndex: null, revision: runtime.presenterState.revision });
+  scheduleSnapshot(runtime, "reveal_hidden");
   renderPresenter(runtime);
+}
+
+async function revealQuiz(runtime, activity, pauseMs = 0) {
+  if (!activity || activity.type !== "quiz" || isActivityRevealed(runtime.presenterState, activity.id)) return;
+  runtime.presenterState.revealedActivityIds.add(activity.id);
+  runtime.presenterState.revision += 1;
+  saveStickyState(runtime);
+  await sendPresenterEvent(runtime, "reveal_answer", { activityId: activity.id, revealed: true, correctIndex: activity.correctIndex, revision: runtime.presenterState.revision });
+  scheduleSnapshot(runtime, "quiz_revealed");
+  renderPresenter(runtime);
+  if (pauseMs > 0) await new Promise((resolve) => window.setTimeout(resolve, pauseMs));
 }
 
 async function loadFromDraft(runtime) {

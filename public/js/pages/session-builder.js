@@ -153,10 +153,10 @@ function render() {
           Start session
         </button>
         <button id="export-json" class="button button-ghost" type="button">
-          Export as JSON
+          Save session
         </button>
         <label class="button button-ghost" style="cursor: pointer;" aria-label="Import session JSON file">
-          Import JSON
+          Load session
           <input id="import-json" type="file" accept=".json,application/json" class="visually-hidden" />
         </label>
       </div>

@@ -14,7 +14,7 @@ import {
   loadSessionFromFile, validateSession,
   sanitizeSimpleToken, normalizeSessionName,
   getOrCreateDeviceId, createPublicState,
-  getCurrentActivity, getActivityById, getActivityNumber, getResponseTotal,
+  getCurrentActivity, getActivityById, getActivityNumber, getResponseTotal, generateParticipantAlias,
   isActivityRevealed, getTextMaxLength, clampIndex,
   hashString, stableStringify, humanizeType, defaultDescription,
   escapeHtml, escapeAttribute,
@@ -32,8 +32,7 @@ export async function initJoinPage() {
   const runtime = {
     page: "join", room, sessionParam, hostToken: "",
     deviceId: getOrCreateDeviceId(),
-    alias: getStoredAlias(),
-    aliasSet: Boolean(getStoredAlias()),
+    alias: getOrCreateAlias(room),
     participantTab: "answer",
     channel: null, client: null,
     session: null, sessionHash: "",
@@ -290,11 +289,7 @@ function renderAudience(runtime) {
           <span class="badge ${runtime.sharedState?.submissionsLocked ? 'badge-locked' : 'badge-open'}">${runtime.sharedState?.submissionsLocked ? 'Submissions closed' : 'Submissions open'}</span>
         </div>
       </div>
-      <div class="metric-grid">
-        ${renderMetricCard("Room", `<span class="mono">${escapeHtml(runtime.room || "—")}</span>`, "Session channel")}
-        ${renderMetricCard("Question", activity ? `${getActivityNumber(runtime.session, activity.id)} / ${runtime.session.activities.length}` : "Waiting", "Current")}
-        ${renderMetricCard("Status", escapeHtml(runtime.connectionLabel), runtime.connectionTone === "success" ? "Live" : "Offline")}
-      </div>
+      ${runtime.session?.leaderboardEnabled ? renderParticipantIdentity(runtime) : ""}
     </div>
     ${renderJoinForm(runtime)}
   ` : runtime.room
@@ -303,9 +298,7 @@ function renderAudience(runtime) {
 
   activityStage.innerHTML = runtime.sharedState?.sessionClosed
     ? renderEmptyState("Session closed", "This session is no longer accepting responses.")
-    : runtime.session?.leaderboardEnabled && !runtime.aliasSet
-      ? renderAliasGate(runtime)
-      : activity ? renderActivityUI(runtime, activity, actState) : renderEmptyState("No active question", "The presenter will push a question to you shortly.");
+    : activity ? renderActivityUI(runtime, activity, actState) : renderEmptyState("No active question", "The presenter will push a question to you shortly.");
 
   resultsStage.innerHTML = activity ? `
     <div class="results-shell">
@@ -444,6 +437,7 @@ function renderActivityUI(runtime, activity, actState) {
         <div><p class="section-kicker">Choose an answer</p><h2 class="activity-title">${escapeHtml(activity.question)}</h2></div>
         <span class="badge ${runtime.sharedState?.submissionsLocked ? 'badge-locked' : 'badge-open'}">${runtime.sharedState?.submissionsLocked ? 'Closed' : 'Open'}</span>
       </div>
+      ${revealed ? '<div class="quiz-reveal-banner">Answer revealed — see how you did.</div>' : ''}
       <div class="choice-grid response-chart">
         ${activity.options.map((opt, i) => {
           const isSel = selected === i;
@@ -526,15 +520,9 @@ function getGate(runtime, activity) {
 
 function bindSubmissions(runtime, activity) {
   bindJoinForm(runtime);
-  const aliasForm = document.getElementById("participant-alias-form");
-  const aliasInput = document.getElementById("participant-alias");
-  aliasForm?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const alias = aliasInput?.value.trim().slice(0, 20) || "";
-    if (!alias) return;
-    runtime.alias = alias;
-    runtime.aliasSet = true;
-    window.localStorage.setItem("seminarsmack:alias", alias);
+  document.querySelector("[data-regenerate-alias]")?.addEventListener("click", () => {
+    runtime.alias = generateParticipantAlias();
+    saveAlias(runtime.room, runtime.alias);
     renderAudience(runtime);
   });
   bindQuestionForm(runtime);
@@ -714,12 +702,21 @@ function renderQuestionsPanel(runtime) {
   `;
 }
 
-function getStoredAlias() {
-  return String(window.localStorage.getItem("seminarsmack:alias") || "").trim().slice(0, 20);
+function getOrCreateAlias(room) {
+  const key = `seminarsmack:alias:${room || "default"}`;
+  const existing = String(window.localStorage.getItem(key) || "").trim().slice(0, 20);
+  if (existing) return existing;
+  const alias = generateParticipantAlias();
+  saveAlias(room, alias);
+  return alias;
 }
 
-function renderAliasGate() {
-  return `<div class="activity-shell alias-gate"><p class="section-kicker">Join the leaderboard</p><h2 class="activity-title">Choose a nickname</h2><p class="body-copy">Use a nickname so your score can appear during this session. Please do not use your real name.</p><form id="participant-alias-form" class="stack-lg"><label class="field"><span>Nickname</span><input id="participant-alias" type="text" maxlength="20" autocomplete="off" placeholder="e.g. Blue Fox" autofocus /></label><button class="button button-primary button-lg" type="submit">Continue</button></form><p class="privacy-hint">This nickname is kept in this browser and used only for the live session.</p></div>`;
+function saveAlias(room, alias) {
+  window.localStorage.setItem(`seminarsmack:alias:${room || "default"}`, String(alias || "Player").slice(0, 20));
+}
+
+function renderParticipantIdentity(runtime) {
+  return `<div class="participant-identity"><span>Playing as</span><strong>${escapeHtml(runtime.alias)}</strong><button class="button button-ghost button-small" type="button" data-regenerate-alias>New codename</button></div>`;
 }
 
 function renderLeaderboard(entries, alias) {

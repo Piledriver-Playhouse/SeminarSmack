@@ -93,6 +93,7 @@ const ROOM_WORDS = [
 
 document.addEventListener("DOMContentLoaded", () => {
   installCopyDelegation();
+  installThemeToggle();
 
   const page = document.body.dataset.page;
 
@@ -112,6 +113,26 @@ document.addEventListener("DOMContentLoaded", () => {
     import("./pages/participant.js").then((m) => m.initJoinPage());
   }
 });
+
+function installThemeToggle() {
+  const saved = window.localStorage.getItem("seminarsmack:theme");
+  const preferred = saved || (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light");
+  document.documentElement.dataset.theme = preferred;
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    const update = () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      button.textContent = dark ? "Light mode" : "Dark mode";
+      button.setAttribute("aria-pressed", String(dark));
+    };
+    update();
+    button.addEventListener("click", () => {
+      const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      window.localStorage.setItem("seminarsmack:theme", next);
+      update();
+    });
+  });
+}
 
 // ── Copy delegation (global) ─────────────────────────────────────
 
@@ -172,6 +193,13 @@ export function randomToken(length = 32) {
   }
 
   return token.join("");
+}
+
+/** Returns a neutral, temporary participant codename for leaderboard sessions. */
+export function generateParticipantAlias() {
+  const colours = ["Amber", "Blue", "Coral", "Indigo", "Jade", "Lilac", "Mint", "Silver", "Teal", "Violet"];
+  const animals = ["Badger", "Dolphin", "Falcon", "Gecko", "Heron", "Koala", "Otter", "Panda", "Robin", "Turtle"];
+  return `${colours[Math.floor(Math.random() * colours.length)]} ${animals[Math.floor(Math.random() * animals.length)]}`;
 }
 
 // ── localStorage session store ───────────────────────────────────

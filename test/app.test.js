@@ -67,6 +67,13 @@ test("randomToken returns a URL-safe token of the requested length", () => {
   assert.match(token, /^[A-Za-z0-9]+$/);
 });
 
+test("generated participant codenames are neutral and displayable", () => {
+  const alias = app.generateParticipantAlias();
+
+  assert.match(alias, /^[A-Za-z]+ [A-Za-z]+$/);
+  assert.ok(alias.length <= 20);
+});
+
 test("signed events verify with the same token and fail with a different token", async () => {
   const payload = { activityId: "quiz-1", revision: 2 };
   const signed = await app.signEvent("reveal_answer", payload, "host-secret");
@@ -113,7 +120,9 @@ test("presenter and participant pages expose the focused navigation shells", asy
   assert.match(presenter, /data-presenter-tab="join"/);
   assert.match(presenter, /id="activity-stage"/);
   assert.match(presenter, /id="results-stage"/);
+  assert.match(presenter, /data-theme-toggle/);
   assert.match(participant, /data-participant-tab="answer"/);
   assert.match(participant, /data-participant-tab="results"/);
   assert.match(participant, /data-participant-tab="questions"/);
+  assert.match(participant, /data-theme-toggle/);
 });
