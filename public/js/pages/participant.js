@@ -32,7 +32,8 @@ export async function initJoinPage() {
   const runtime = {
     page: "join", room, sessionParam, hostToken: "",
     deviceId: getOrCreateDeviceId(),
-    alias: getOrCreateAlias(),
+    alias: getStoredAlias(),
+    aliasSet: Boolean(getStoredAlias()),
     channel: null, client: null,
     session: null, sessionHash: "",
     sessionSource: sessionParam ? `${sessionParam}.json` : "not loaded",
@@ -296,7 +297,9 @@ function renderAudience(runtime) {
 
   activityStage.innerHTML = runtime.sharedState?.sessionClosed
     ? renderEmptyState("Session closed", "This session is no longer accepting responses.")
-    : activity ? renderActivityUI(runtime, activity, actState) : renderEmptyState("No active question", "The presenter will push a question to you shortly.");
+    : runtime.session?.leaderboardEnabled && !runtime.aliasSet
+      ? renderAliasGate(runtime)
+      : activity ? renderActivityUI(runtime, activity, actState) : renderEmptyState("No active question", "The presenter will push a question to you shortly.");
 
   resultsStage.innerHTML = activity ? `
     <div class="results-shell">
@@ -329,7 +332,6 @@ function renderJoinForm(runtime) {
   return `
     <form id="manual-join-form" class="stack-lg">
       <label class="field"><span>Room code</span><input id="manual-room-code" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="e.g. spark-1234" value="${escapeAttribute(runtime.room || "")}" /></label>
-      ${runtime.session?.leaderboardEnabled ? '<label class="field"><span>Leaderboard nickname <small>(optional)</small></span><input id="participant-alias" type="text" maxlength="20" placeholder="e.g. Blue Fox" value="' + escapeAttribute(runtime.alias) + '" /><small class="muted">Use a nickname, not your real name.</small></label>' : ''}
       <div class="control-row">
         <button class="button button-primary" type="submit">Join session</button>
       </div>
@@ -484,10 +486,16 @@ function getGate(runtime, activity) {
 
 function bindSubmissions(runtime, activity) {
   bindJoinForm(runtime);
+  const aliasForm = document.getElementById("participant-alias-form");
   const aliasInput = document.getElementById("participant-alias");
-  aliasInput?.addEventListener("input", () => {
-    runtime.alias = aliasInput.value.trim().slice(0, 20) || "Player";
-    window.localStorage.setItem("seminarsmack:alias", runtime.alias);
+  aliasForm?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const alias = aliasInput?.value.trim().slice(0, 20) || "";
+    if (!alias) return;
+    runtime.alias = alias;
+    runtime.aliasSet = true;
+    window.localStorage.setItem("seminarsmack:alias", alias);
+    renderAudience(runtime);
   });
   bindQuestionForm(runtime);
   if (!activity) return;
@@ -666,9 +674,12 @@ function renderQuestionsPanel(runtime) {
   `;
 }
 
-function getOrCreateAlias() {
-  const existing = window.localStorage.getItem("seminarsmack:alias");
-  return String(existing || "Player").trim().slice(0, 20) || "Player";
+function getStoredAlias() {
+  return String(window.localStorage.getItem("seminarsmack:alias") || "").trim().slice(0, 20);
+}
+
+function renderAliasGate() {
+  return `<div class="activity-shell alias-gate"><p class="section-kicker">Join the leaderboard</p><h2 class="activity-title">Choose a nickname</h2><p class="body-copy">Use a nickname so your score can appear during this session. Please do not use your real name.</p><form id="participant-alias-form" class="stack-lg"><label class="field"><span>Nickname</span><input id="participant-alias" type="text" maxlength="20" autocomplete="off" placeholder="e.g. Blue Fox" autofocus /></label><button class="button button-primary button-lg" type="submit">Continue</button></form><p class="privacy-hint">This nickname is kept in this browser and used only for the live session.</p></div>`;
 }
 
 function renderLeaderboard(entries, alias) {

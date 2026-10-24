@@ -974,7 +974,16 @@ body::before { display: none; }
 .privacy-toggle { display: flex; gap: var(--space-sm); align-items: flex-start; padding: var(--space-md); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); }
 .privacy-toggle input { width: 1.25rem; height: 1.25rem; margin-top: 0.15rem; accent-color: var(--accent); }
 .privacy-toggle span { display: grid; gap: 0.2rem; }
+.privacy-toggle strong { display: block; }
 .privacy-toggle small, .privacy-hint { color: var(--muted); font-size: 0.84rem; }
+.presenter-tabs { display: flex; gap: 0.35rem; margin: var(--space-md) 0; padding: 0.3rem; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface); }
+.presenter-tab { flex: 1 0 auto; min-height: 2.5rem; padding: 0.55rem 0.9rem; border: 0; border-radius: var(--radius-full); background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; }
+.presenter-tab:hover, .presenter-tab.is-active { background: var(--accent-soft); color: var(--accent-strong); }
+.control-menu { align-self: center; min-width: 7rem; background: var(--surface); }
+.control-menu summary { padding: 0.7rem 0.95rem; color: var(--text); }
+.control-menu-actions { display: grid; gap: 0.5rem; min-width: 12rem; padding: 0.75rem; }
+.control-menu-actions .button { width: 100%; }
+.alias-gate { max-width: 34rem; margin: 0 auto; }
 .leaderboard-panel { margin-top: var(--space-md); padding: var(--space-lg); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
 .leaderboard-list { display: grid; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
 .leaderboard-list li { display: grid; grid-template-columns: 2rem 1fr auto; align-items: center; gap: var(--space-sm); padding: 0.7rem 0.85rem; border-radius: var(--radius-md); background: var(--surface-soft); }

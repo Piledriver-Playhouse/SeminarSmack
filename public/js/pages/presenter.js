@@ -32,6 +32,7 @@ export async function initPresenterPage() {
     presenterState: null, authoringDraft: "",
     bannerMessage: "", bannerTone: "info",
     connectionLabel: "Not connected", connectionTone: "muted",
+    presenterTab: "overview",
     snapshotTimer: null, heartbeatId: null,
     knownQuestionIds: new Set(),
     audioPrimed: false
@@ -311,11 +312,13 @@ function renderPresenter(runtime) {
       <div class="control-row">
         <button id="prev-activity" class="button button-ghost" type="button" ${controlsDisabled || !activity || getActivityNumber(runtime.session, activity.id) === 1 ? 'disabled' : ''}>← Previous</button>
         <button id="next-activity" class="button button-primary" type="button" ${controlsDisabled || !activity || getActivityNumber(runtime.session, activity.id) === runtime.session?.activities.length ? 'disabled' : ''}>Next →</button>
-        <button id="toggle-lock" class="button button-secondary" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>${runtime.presenterState?.submissionsLocked ? 'Open submissions' : 'Close submissions'}</button>
-        <button id="reset-activity" class="button button-danger" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>Reset & Allow Resubmission</button>
-        <button id="toggle-reveal" class="button button-ghost" type="button" ${controlsDisabled || !canReveal ? 'disabled' : ''}>${isRevealed ? 'Hide answer' : 'Reveal answer'}</button>
-        <button id="close-session" class="button button-danger" type="button" ${disabled || runtime.presenterState?.sessionClosed ? 'disabled' : ''}>${runtime.presenterState?.sessionClosed ? 'Session closed' : 'Close session'}</button>
-        <button id="export-responses" class="button button-ghost" type="button" ${disabled ? 'disabled' : ''}>Export responses</button>
+        <button id="toggle-lock" class="button button-secondary" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>${runtime.presenterState?.submissionsLocked ? 'Open answers' : 'Close answers'}</button>
+        <details class="control-menu"><summary>More</summary><div class="control-menu-actions">
+          <button id="toggle-reveal" class="button button-ghost" type="button" ${controlsDisabled || !canReveal ? 'disabled' : ''}>${isRevealed ? 'Hide answer' : 'Reveal answer'}</button>
+          <button id="reset-activity" class="button button-danger" type="button" ${controlsDisabled || !activity ? 'disabled' : ''}>Reset question</button>
+          <button id="export-responses" class="button button-ghost" type="button" ${disabled ? 'disabled' : ''}>Export results</button>
+          <button id="close-session" class="button button-danger" type="button" ${disabled || runtime.presenterState?.sessionClosed ? 'disabled' : ''}>${runtime.presenterState?.sessionClosed ? 'Session closed' : 'End session'}</button>
+        </div></details>
       </div>
 
     </div>
@@ -391,6 +394,7 @@ function renderPresenter(runtime) {
   `;
 
   bindInteractions(runtime);
+  bindPresenterTabs(runtime);
 
   if (activeJsonInput) {
     const next = document.getElementById("session-json-input");
@@ -399,6 +403,31 @@ function renderPresenter(runtime) {
       next.setSelectionRange(jsonSelStart, jsonSelEnd);
     }
   }
+}
+
+function bindPresenterTabs(runtime) {
+  document.querySelectorAll("[data-presenter-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.presenterTab === runtime.presenterTab);
+    button.onclick = () => {
+      runtime.presenterTab = button.dataset.presenterTab || "overview";
+      applyPresenterTab(runtime.presenterTab);
+      document.querySelectorAll("[data-presenter-tab]").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.presenterTab === runtime.presenterTab));
+    };
+  });
+  applyPresenterTab(runtime.presenterTab);
+}
+
+function applyPresenterTab(tab) {
+  const visible = {
+    overview: ["control-panel", "activity-stage", "results-stage"],
+    join: ["qr-panel"],
+    questions: ["questions-panel"],
+    session: ["authoring-panel"]
+  }[tab] || ["control-panel", "activity-stage", "results-stage"];
+  ["qr-panel", "control-panel", "activity-stage", "results-stage", "questions-panel", "authoring-panel"].forEach((id) => {
+    const panel = document.getElementById(id);
+    if (panel) panel.hidden = !visible.includes(id);
+  });
 }
 
 function renderQR(url) {
