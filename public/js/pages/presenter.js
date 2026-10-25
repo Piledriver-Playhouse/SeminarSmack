@@ -373,7 +373,11 @@ function renderPresenter(runtime) {
   // Authoring
   authoringPanel.innerHTML = `
     <div class="authoring-shell">
-          <p class="section-kicker">Session setup</p>
+      <p class="section-kicker">Session setup</p>
+      <label class="privacy-toggle presenter-leaderboard-setting">
+        <input id="presenter-leaderboard-toggle" type="checkbox" ${runtime.session?.leaderboardEnabled ? "checked" : ""} />
+        <span><strong>Show a live leaderboard</strong><small>Use temporary codenames and score correct quiz answers during this session.</small></span>
+      </label>
       <details>
         <summary>Save or load this session</summary>
         <div class="stack-lg">
@@ -581,6 +585,26 @@ function bindInteractions(runtime) {
     const val = runtime.authoringDraft || (runtime.session ? JSON.stringify(runtime.session, null, 2) : "");
     if (val) downloadText("session.json", val);
   });
+  document.getElementById("presenter-leaderboard-toggle")?.addEventListener("change", (event) => togglePresenterLeaderboard(runtime, event.target.checked));
+}
+
+async function togglePresenterLeaderboard(runtime, enabled) {
+  if (!runtime.session || !runtime.presenterState) return;
+  const hasUnscoredQuiz = runtime.session?.activities.some((activity) => activity.type === "quiz" && activity.correctIndex === null);
+  if (enabled && hasUnscoredQuiz) {
+    runtime.bannerMessage = "Add a correct answer to every quiz before turning on the leaderboard.";
+    runtime.bannerTone = "warning";
+    renderPresenter(runtime);
+    return;
+  }
+  runtime.session.leaderboardEnabled = Boolean(enabled);
+  if (!enabled) runtime.presenterState.leaderboard = [];
+  runtime.presenterState.revision += 1;
+  saveStickyState(runtime);
+  await broadcastSnapshot(runtime, "leaderboard_setting_changed");
+  runtime.bannerMessage = enabled ? "Leaderboard is on for this session." : "Leaderboard is off for this session.";
+  runtime.bannerTone = "success";
+  renderPresenter(runtime);
 }
 
 async function runPresenterCommand(runtime, command, message) {

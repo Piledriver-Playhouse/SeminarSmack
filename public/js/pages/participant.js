@@ -289,7 +289,7 @@ function renderAudience(runtime) {
           <span class="badge ${runtime.sharedState?.submissionsLocked ? 'badge-locked' : 'badge-open'}">${runtime.sharedState?.submissionsLocked ? 'Submissions closed' : 'Submissions open'}</span>
         </div>
       </div>
-      ${runtime.session?.leaderboardEnabled ? renderParticipantIdentity(runtime) : ""}
+      ${renderParticipantIdentity(runtime)}
     </div>
     ${renderJoinForm(runtime)}
   ` : runtime.room

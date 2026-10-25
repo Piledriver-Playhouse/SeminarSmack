@@ -125,4 +125,6 @@ test("presenter and participant pages expose the focused navigation shells", asy
   assert.match(participant, /data-participant-tab="results"/);
   assert.match(participant, /data-participant-tab="questions"/);
   assert.match(participant, /data-theme-toggle/);
+  assert.match((await readFile(new URL("../public/js/pages/presenter.js", import.meta.url), "utf8")), /presenter-leaderboard-toggle/);
+  assert.match((await readFile(new URL("../public/js/pages/participant.js", import.meta.url), "utf8")), /Playing as/);
 });

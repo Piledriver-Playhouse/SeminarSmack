@@ -115,9 +115,14 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function installThemeToggle() {
-  const saved = window.localStorage.getItem("seminarsmack:theme");
+  let saved = "";
+  try { saved = window.localStorage.getItem("seminarsmack:theme") || ""; } catch {}
   const preferred = saved || (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light");
-  document.documentElement.dataset.theme = preferred;
+  const applyTheme = (theme) => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.classList.toggle("theme-dark", theme === "dark");
+  };
+  applyTheme(preferred);
   document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
     const update = () => {
       const dark = document.documentElement.dataset.theme === "dark";
@@ -127,8 +132,8 @@ function installThemeToggle() {
     update();
     button.addEventListener("click", () => {
       const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
-      window.localStorage.setItem("seminarsmack:theme", next);
+      applyTheme(next);
+      try { window.localStorage.setItem("seminarsmack:theme", next); } catch {}
       update();
     });
   });
