@@ -127,4 +127,7 @@ test("presenter and participant pages expose the focused navigation shells", asy
   assert.match(participant, /data-theme-toggle/);
   assert.match((await readFile(new URL("../public/js/pages/presenter.js", import.meta.url), "utf8")), /presenter-leaderboard-toggle/);
   assert.match((await readFile(new URL("../public/js/pages/participant.js", import.meta.url), "utf8")), /Playing as/);
+  const styles = await readFile(new URL("../public/assets/css/styles.css", import.meta.url), "utf8");
+  assert.match(styles, /html\[data-theme="dark"\]/);
+  assert.match(styles, /font-family: var\(--sans\) !important/);
 });
