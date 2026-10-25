@@ -32,7 +32,7 @@ export async function initPresenterPage() {
     presenterState: null, authoringDraft: "",
     bannerMessage: "", bannerTone: "info",
     connectionLabel: "Not connected", connectionTone: "muted",
-    presenterTab: "overview",
+    presenterTab: "join",
     snapshotTimer: null, heartbeatId: null,
     knownQuestionIds: new Set(),
     audioPrimed: false
@@ -241,6 +241,7 @@ function renderPresenter(runtime) {
   const activityStage = document.getElementById("activity-stage");
   const resultsStage = document.getElementById("results-stage");
   const questionsPanel = document.getElementById("questions-panel");
+  const leaderboardPanel = document.getElementById("leaderboard-panel");
   const authoringPanel = document.getElementById("authoring-panel");
   const qrPanel = document.getElementById("qr-panel");
   const pageStatus = document.getElementById("page-status");
@@ -251,7 +252,7 @@ function renderPresenter(runtime) {
 
   setBanner(pageStatus, runtime.bannerMessage, runtime.bannerTone);
 
-  if (!sessionSummary || !controlPanel || !activityStage || !resultsStage || !questionsPanel || !authoringPanel) return;
+  if (!sessionSummary || !controlPanel || !activityStage || !resultsStage || !questionsPanel || !leaderboardPanel || !authoringPanel) return;
 
   const activity = getCurrentActivity(runtime.session, runtime.presenterState);
   const actState = activity ? runtime.presenterState?.activityStates[activity.id] : null;
@@ -351,9 +352,9 @@ function renderPresenter(runtime) {
     </div>
   ` : renderEmptyState("No results", "Results appear once students submit.");
 
-  if (runtime.session?.leaderboardEnabled) {
-    resultsStage.innerHTML += renderLeaderboard(runtime.presenterState?.leaderboard || [], "Session leaderboard");
-  }
+  leaderboardPanel.innerHTML = runtime.session?.leaderboardEnabled
+    ? renderLeaderboard(runtime.presenterState?.leaderboard || [], "Session leaderboard")
+    : renderEmptyState("Leaderboard is off", "Turn it on in Session setup when you want to score quiz answers.");
 
   questionsPanel.innerHTML = `
     <div class="activity-shell">
@@ -424,9 +425,10 @@ function applyPresenterTab(tab) {
     overview: ["control-panel", "activity-stage", "results-stage"],
     join: ["qr-panel"],
     questions: ["questions-panel"],
+    leaderboard: ["leaderboard-panel"],
     session: ["authoring-panel"]
   }[tab] || ["control-panel", "activity-stage", "results-stage"];
-  ["qr-panel", "control-panel", "activity-stage", "results-stage", "questions-panel", "authoring-panel"].forEach((id) => {
+  ["qr-panel", "control-panel", "activity-stage", "results-stage", "questions-panel", "leaderboard-panel", "authoring-panel"].forEach((id) => {
     const panel = document.getElementById(id);
     if (panel) panel.hidden = !visible.includes(id);
   });

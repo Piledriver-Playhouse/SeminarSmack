@@ -118,6 +118,8 @@ test("presenter and participant pages expose the focused navigation shells", asy
 
   assert.match(presenter, /data-presenter-tab="overview"/);
   assert.match(presenter, /data-presenter-tab="join"/);
+  assert.match(presenter, /data-presenter-tab="leaderboard"/);
+  assert.match(presenter, /id="leaderboard-panel"/);
   assert.match(presenter, /id="activity-stage"/);
   assert.match(presenter, /id="results-stage"/);
   assert.match(presenter, /data-theme-toggle/);

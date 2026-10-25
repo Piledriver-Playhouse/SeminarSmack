@@ -63,6 +63,16 @@ html[data-theme="dark"] {
   --shadow-md: 0 16px 42px rgba(0, 0, 0, 0.32);
 }
 
+html[data-theme="dark"] .button-danger { border-color: #70404b; }
+html[data-theme="dark"] .notice-info { border-color: #315f5d; }
+html[data-theme="dark"] .notice-warning { border-color: #765b2d; }
+html[data-theme="dark"] .notice-success { border-color: #356c4b; }
+html[data-theme="dark"] .choice-card.is-correct { border-color: #3d7653; }
+html[data-theme="dark"] .choice-card.is-incorrect { border-color: #74404b; background: var(--red-wash); }
+html[data-theme="dark"] .leaderboard-list li { background: rgba(255, 255, 255, 0.04); }
+html[data-theme="dark"] .leaderboard-list li.is-you { background: var(--surface-3); }
+html[data-theme="dark"] input::placeholder, html[data-theme="dark"] textarea::placeholder { color: #8f818c; }
+
 * { box-sizing: border-box; }
 html { color-scheme: light; }
 body { min-width: 320px; min-height: 100vh; margin: 0; color: var(--ink); background: var(--bg); font-family: var(--sans) !important; font-size: 16px; line-height: 1.55; }
