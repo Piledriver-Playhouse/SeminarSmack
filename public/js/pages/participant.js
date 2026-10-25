@@ -236,7 +236,12 @@ function applySnapshot(runtime, payload) {
   nextState.revealedActivityIds = new Set(Array.isArray(payload.revealedActivityIds) ? payload.revealedActivityIds : []);
   nextState.questions = Array.isArray(payload.questions) ? payload.questions.map(normalizeQuestion).filter(Boolean) : [];
   nextState.sessionClosed = Boolean(payload.sessionClosed);
-  nextState.leaderboard = Array.isArray(payload.leaderboard) ? payload.leaderboard.map((entry) => ({ alias: String(entry.alias || "Player").slice(0, 20), score: Number(entry.score) || 0 })) : [];
+  nextState.leaderboard = Array.isArray(payload.leaderboard) ? payload.leaderboard.map((entry) => ({
+    alias: String(entry.alias || "Player").slice(0, 20),
+    answered: Number(entry.answered) || 0,
+    correct: Number(entry.correct) || 0,
+    score: Number(entry.score) || 0
+  })) : [];
 
   Object.entries(nextState.activityStates).forEach(([aid, state]) => {
     const incoming = payload.activityStates?.[aid] || {};
@@ -720,9 +725,16 @@ function renderParticipantIdentity(runtime) {
 }
 
 function renderLeaderboard(entries, alias) {
-  if (!entries.length) return `<section class="leaderboard-panel"><p class="section-kicker">Leaderboard</p><p class="muted">Scores will appear after the first correct answer.</p></section>`;
-  const current = entries.findIndex((entry) => entry.alias === alias);
-  return `<section class="leaderboard-panel"><div class="title-row"><div><p class="section-kicker">Leaderboard</p><h2 class="activity-title">Top players</h2></div><span class="badge badge-accent">Temporary</span></div><ol class="leaderboard-list">${entries.slice(0, 10).map((entry, index) => `<li class="${entry.alias === alias ? "is-you" : ""}"><span class="leaderboard-rank">${index + 1}</span><span>${escapeHtml(entry.alias)}${entry.alias === alias ? " (you)" : ""}</span><strong>${entry.score}</strong></li>`).join("")}</ol>${current < 0 ? "" : '<p class="privacy-hint">Your nickname is only used for this live session.</p>'}</section>`;
+  if (!entries.length) return `<section class="leaderboard-panel"><p class="section-kicker">Leaderboard</p><p class="muted">Players will appear after they answer a quiz question.</p></section>`;
+  const ranked = entries.map((entry, index) => ({
+    ...entry,
+    answered: Number(entry.answered) || 0,
+    correct: Number(entry.correct) || 0,
+    score: Number(entry.score) || 0,
+    rank: index + 1
+  }));
+  const current = ranked.findIndex((entry) => entry.alias === alias);
+  return `<section class="leaderboard-panel"><div class="title-row"><div><p class="section-kicker">Leaderboard</p><h2 class="activity-title">Top players</h2></div><span class="badge badge-accent">${ranked.length} player${ranked.length === 1 ? "" : "s"}</span></div><div class="leaderboard-columns"><span>Rank</span><span>Player</span><span>Correct</span><span>Answered</span><span>Points</span></div><ol class="leaderboard-list">${ranked.slice(0, 10).map((entry) => `<li class="${entry.alias === alias ? "is-you" : ""}"><span class="leaderboard-rank">${entry.rank}</span><span>${escapeHtml(entry.alias)}${entry.alias === alias ? " (you)" : ""}</span><span>${entry.correct}</span><span>${entry.answered}</span><strong>${entry.score}</strong></li>`).join("")}</ol>${current < 0 ? "" : `<p class="privacy-hint">You are #${ranked[current].rank} with ${ranked[current].correct} correct answer${ranked[current].correct === 1 ? "" : "s"} from ${ranked[current].answered} answered.</p>`}</section>`;
 }
 
 function bindQuestionForm(runtime) {

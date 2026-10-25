@@ -752,8 +752,8 @@ async function handleSubmission(runtime, expectedType, payload) {
     if (!Number.isInteger(oi) || oi < 0 || oi >= activity.options.length || entry.count >= SUBMISSION_LIMITS[expectedType]) return;
     actState.counts[oi] = (actState.counts[oi] || 0) + 1;
     entry.choiceIndex = oi;
-    if (runtime.session.leaderboardEnabled && expectedType === "quiz" && activity.correctIndex === oi) {
-      updateLeaderboard(runtime, alias, 100);
+    if (runtime.session.leaderboardEnabled && expectedType === "quiz") {
+      updateLeaderboard(runtime, alias, activity.correctIndex === oi);
     }
   }
 
@@ -893,17 +893,39 @@ function sanitizeAlias(value) {
   return String(value || "Player").trim().replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 20) || "Player";
 }
 
-function updateLeaderboard(runtime, alias, points) {
+function updateLeaderboard(runtime, alias, isCorrect) {
   const existing = runtime.presenterState.leaderboard.find((entry) => entry.alias === alias);
-  if (existing) existing.score += points;
-  else runtime.presenterState.leaderboard.push({ alias, score: points });
-  runtime.presenterState.leaderboard.sort((a, b) => b.score - a.score || a.alias.localeCompare(b.alias));
+  if (existing) {
+    existing.answered = Number(existing.answered) || 0;
+    existing.correct = Number(existing.correct) || 0;
+    existing.score = Number(existing.score) || 0;
+    existing.answered += 1;
+    if (isCorrect) {
+      existing.correct += 1;
+      existing.score += 100;
+    }
+  } else {
+    runtime.presenterState.leaderboard.push({
+      alias,
+      answered: 1,
+      correct: isCorrect ? 1 : 0,
+      score: isCorrect ? 100 : 0
+    });
+  }
+  runtime.presenterState.leaderboard.sort((a, b) => b.score - a.score || b.correct - a.correct || b.answered - a.answered || a.alias.localeCompare(b.alias));
   runtime.presenterState.leaderboard = runtime.presenterState.leaderboard.slice(0, 50);
 }
 
 function renderLeaderboard(entries, title) {
-  if (!entries.length) return `<section class="leaderboard-panel"><p class="section-kicker">${escapeHtml(title)}</p><p class="muted">Scores will appear after the first correct answer.</p></section>`;
-  return `<section class="leaderboard-panel"><div class="title-row"><div><p class="section-kicker">${escapeHtml(title)}</p><h2 class="activity-title">Top players</h2></div><span class="badge badge-accent">Temporary</span></div><ol class="leaderboard-list">${entries.slice(0, 10).map((entry, index) => `<li><span class="leaderboard-rank">${index + 1}</span><span>${escapeHtml(entry.alias)}</span><strong>${entry.score}</strong></li>`).join("")}</ol><p class="privacy-hint">Nicknames are only used for this live session and are not saved to an account.</p></section>`;
+  if (!entries.length) return `<section class="leaderboard-panel"><p class="section-kicker">${escapeHtml(title)}</p><p class="muted">Players will appear after they answer a quiz question.</p></section>`;
+  const ranked = entries.map((entry, index) => ({
+    ...entry,
+    answered: Number(entry.answered) || 0,
+    correct: Number(entry.correct) || 0,
+    score: Number(entry.score) || 0,
+    rank: index + 1
+  }));
+  return `<section class="leaderboard-panel"><div class="title-row"><div><p class="section-kicker">${escapeHtml(title)}</p><h2 class="activity-title">Top players</h2></div><span class="badge badge-accent">${ranked.length} player${ranked.length === 1 ? "" : "s"}</span></div><div class="leaderboard-columns"><span>Rank</span><span>Player</span><span>Correct</span><span>Answered</span><span>Points</span></div><ol class="leaderboard-list">${ranked.slice(0, 10).map((entry) => `<li><span class="leaderboard-rank">${entry.rank}</span><span>${escapeHtml(entry.alias)}</span><span>${entry.correct}</span><span>${entry.answered}</span><strong>${entry.score}</strong></li>`).join("")}</ol><p class="privacy-hint">Correct answers are worth 100 points. Nicknames are only used for this live session and are not saved to an account.</p></section>`;
 }
 
 function renderKanbanBoard(activity, cards) {
